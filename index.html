@@ -32,9 +32,19 @@ li{margin:6px 0;max-width:90ch}.note{background:var(--sf);border:1px solid var(-
 .cv{font-size:34px;font-weight:600;line-height:1.15;margin:8px 0 2px}.sm2{font-size:13px}
 #lg{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px}.lgc{width:min(380px,100%);background:var(--sf);border:1px solid var(--ln);border-radius:14px;padding:24px;display:grid;gap:10px}.lgc h1{margin:0}
 textarea{width:100%;height:90px;font:12px/1.4 monospace;color:var(--fg);background:var(--sf);border:1px solid var(--ln)}
+.tw>table>tbody>tr:not(.sb):not(.sp)>td:first-child,.tw>table>thead>tr>th:first-child{position:sticky;left:0;background:var(--sf);z-index:1}
+.tw>table>tbody>tr[aria-selected=true]>td:first-child{background:var(--b5)}
+.hint{display:none;color:var(--mu);font-size:12px;margin:4px 0}#ft{display:none}.bc{overflow-x:auto}.bc svg{min-width:480px}html{-webkit-text-size-adjust:100%}
+@media(max-width:700px){
+.w{padding:0 14px}h1{font-size:19px;margin-top:16px}h2{margin:22px 0 8px}
+#ft{display:inline-block;margin:10px 0 0}#gf{display:none;padding:8px 0}#gf.open{display:flex}
+.fl input,.fl select{flex:1 1 140px;min-width:0}input,select,button,textarea{font-size:16px}.tabs button{font-size:14px;padding:10px 12px;white-space:nowrap}
+.cg{grid-template-columns:1fr 1fr;gap:10px}.cd{padding:14px}.cl{font-size:11px;gap:6px}.cv{font-size:25px}.sm2{font-size:12px}
+.two{grid-template-columns:1fr}.kg{grid-template-columns:1fr 1fr}.kv{font-size:22px}
+table{font-size:13px}td,th{padding:7px 8px}.hint{display:block}.note{padding:2px 14px 8px}}
 </style></head><body><div class=w>
-<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div><h1>Dashboard RPD</h1><p class=mu id=sub></p></div><div style="margin-top:22px;display:flex;gap:8px"><button id=thm aria-label="Ganti tema">Terang/Gelap</button><button id=out hidden>Keluar</button></div></div></div>
-<div class=bar><div class=w><div class=fl>
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px"><div><h1>Dashboard RPD</h1><p class=mu id=sub></p></div><div style="margin-top:22px;display:flex;gap:8px"><button id=thm aria-label="Ganti tema">Terang/Gelap</button><button id=out hidden>Keluar</button></div></div></div>
+<div class=bar><div class=w><button id=ft aria-expanded=false>Filter</button><div class=fl id=gf>
 <label class="mu sm">Periode survei</label><select id=f0></select><span class=mu>sampai</span><select id=f1></select>
 <select id=fr></select><select id=fa></select><button id=rs>Reset filter</button></div>
 <div class=tabs role=tablist><button data-tab=ringkasan>Ringkasan</button><button data-tab=kelurahan>Potensi per kelurahan</button><button data-tab=korlap>Surveyor per koordinator</button><button data-tab=data>Cek PAM ID dan data</button><button data-tab=catatan>Catatan data</button></div></div></div>
@@ -56,7 +66,7 @@ function tbl(id,cols,rows,tot,o={}){
  const cmp=(a,b)=>{const x=a.v[st.i],y=b.v[st.i];return(typeof x=='string'?x.localeCompare(y,'id'):(x??-1)-(y??-1))*st.d};
  const rs=[...rows].sort((a,b)=>(a.g||0)-(b.g||0)||cmp(a,b)),lim=o.lim&&!S.all?o.lim:1e9;
  const cell=(c,v)=>c.t=='s'?`<td class=s>${v}</td>`:c.t=='n'?`<td>${N(v)}</td>`:c.t=='p'?`<td>${v==null?'–':PC(v)}</td>`:`<td>${v==null?'–':`<span class=tr><i style="width:${Math.min(100,v*100)}%"></i></span>${PC(v)}`}</td>`;
- let h=`<div class=tw><table data-id=${id}><thead><tr>`+cols.map((c,i)=>`<th data-i=${i} class="${c.t=='s'?'s':''}">${c.h}${st.i==i?(st.d>0?' ▲':' ▼'):''}</th>`).join('')+'</tr></thead><tbody>',sp=0;
+ let h=`<p class=hint>Geser tabel ke samping untuk melihat semua kolom.</p><div class=tw><table data-id=${id}><thead><tr>`+cols.map((c,i)=>`<th data-i=${i} class="${c.t=='s'?'s':''}">${c.h}${st.i==i?(st.d>0?' ▲':' ▼'):''}</th>`).join('')+'</tr></thead><tbody>',sp=0;
  rs.slice(0,lim).forEach(r=>{if(r.g&&!sp){sp=1;h+=`<tr class=sp><td colspan=${cols.length}>${o.sep}</td></tr>`}
   h+=`<tr${r.k?` class=c data-k="${r.k}"`:''}${r.on?' aria-selected=true':''}>`+r.v.map((v,i)=>cell(cols[i],v)).join('')+'</tr>';
   if(r.sub)h+=`<tr class=sb><td colspan=${cols.length}>${r.sub}</td></tr>`});
@@ -132,7 +142,7 @@ function render(){
  $('#main').innerHTML=({ringkasan:vRingkasan,kelurahan:vKel,korlap:vKorlap,catatan:vCatatan,data:vData})[S.tab]();if(S.tab=='kelurahan')kt();if(S.tab=='data')dt()}
 function fill(){const o=(a,s)=>a.map(([v,l])=>`<option value="${v}"${v==s?' selected':''}>${l}</option>`).join(''),mo=D.months.map((m,i)=>[i,ML(i)]);
  $('#f0').innerHTML=o(mo,S.m0);$('#f1').innerHTML=o(mo,S.m1);$('#fr').innerHTML=o([['','Semua regional'],...[...new Set(D.reg)].sort().map(r=>[r,r])],S.reg);
- $('#fa').innerHTML=o([[-1,'Semua area bisnis'],...D.abs.map((a,i)=>[i,a]).filter(x=>!S.reg||D.reg[x[0]]==S.reg)],S.ab)}
+ $('#fa').innerHTML=o([[-1,'Semua area bisnis'],...D.abs.map((a,i)=>[i,a]).filter(x=>!S.reg||D.reg[x[0]]==S.reg)],S.ab);$('#ft').textContent='Filter'+(S.reg||S.ab>=0||S.m0>0||S.m1<D.months.length-1?' (aktif)':'')}
 $('#f0').onchange=e=>{S.m0=+e.target.value;if(S.m0>S.m1)S.m1=S.m0;fill();render()};
 $('#f1').onchange=e=>{S.m1=+e.target.value;if(S.m1<S.m0)S.m0=S.m1;fill();render()};
 $('#fr').onchange=e=>{S.reg=e.target.value;S.ab=-1;fill();render()};
@@ -157,5 +167,5 @@ function init(d,role){D=d;REC=d.rec;ROLE=role;S.m1=D.months.length-1;try{OV=JSON
 function logout(){D=REC=null;OV={};ROLE='';Object.assign(S,{m0:0,m1:0,reg:'',ab:-1,tab:'ringkasan',sort:{},q:'',open:'',all:0,dq:{p:'',k:'',s:'',c:0,f:0,n:100}});$('#main').innerHTML='';$('#sub').textContent='';$('#out').hidden=true;$('#li').value='';$('#lp').value='';$('#le').textContent='';$('#lb').disabled=false;$('#lg').style.display='flex';$('#li').focus()}
 async function go(){const b=$('#lb'),r=$('#li').value.trim().toLowerCase()=='guest'?'guest':'owner';b.disabled=true;$('#le').textContent='Membuka data…';let d;try{d=await unlock($('#li').value,$('#lp').value)}catch(e){$('#le').textContent='ID atau kata sandi salah.';b.disabled=false;return}
  try{init(d,r)}catch(e){console.error(e);$('#le').textContent='Data terbuka tetapi gagal ditampilkan: '+e.message;b.disabled=false}}
-$('#lb').onclick=go;$('#li').onkeydown=$('#lp').onkeydown=e=>{if(e.key=='Enter')go()};$('#out').onclick=logout;
+$('#lb').onclick=go;$('#li').onkeydown=$('#lp').onkeydown=e=>{if(e.key=='Enter')go()};$('#out').onclick=logout;$('#ft').onclick=()=>{const o=$('#gf').classList.toggle('open');$('#ft').setAttribute('aria-expanded',o)};
 </script></body></html>
