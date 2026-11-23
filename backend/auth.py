@@ -22,9 +22,7 @@ def user_key(value):
     return hashlib.sha256(normalize_id(value).encode()).hexdigest()[:16]
 
 
-def decrypt_source(path, account, password):
-    """Keep the original PBKDF2(500000)/AES-GCM/gzip data contract exactly."""
-    envelope = json.loads(Path(path).read_text())
+def unwrap_key(envelope, account, password):
     account = normalize_id(account)
     wrapped = envelope.get("u", {}).get(user_key(account))
     # Unknown accounts do the same expensive derivation, without disclosing membership.
@@ -33,11 +31,25 @@ def decrypt_source(path, account, password):
     if not wrapped:
         raise ValueError("Invalid credentials")
     raw = AESGCM(key).decrypt(base64.b64decode(wrapped["i"]), base64.b64decode(wrapped["k"]), None)
-    compressed = AESGCM(raw).decrypt(base64.b64decode(envelope["i"]), base64.b64decode(envelope["c"]), None)
-    data = json.loads(gzip.decompress(compressed))
     if wrapped.get("r") not in ("a", "g"):
         raise ValueError("Unsupported role")
-    return data, "owner" if wrapped["r"] == "a" else "guest"
+    return raw, "owner" if wrapped["r"] == "a" else "guest"
+
+
+def decrypt_payload(envelope, key):
+    compressed=AESGCM(key).decrypt(base64.b64decode(envelope['i']),base64.b64decode(envelope['c']),None)
+    return json.loads(gzip.decompress(compressed))
+
+
+def decrypt_source(path, account, password):
+    """Keep the original PBKDF2(500000)/AES-GCM/gzip data contract exactly."""
+    envelope=json.loads(Path(path).read_text())
+    key,role=unwrap_key(envelope,account,password)
+    return decrypt_payload(envelope,key),role
+
+
+class SessionCapacity(RuntimeError):
+    pass
 
 
 @dataclass
@@ -84,8 +96,15 @@ class Sessions:
         now = time.monotonic()
         with self.lock:
             self._prune(now)
+            # Old imports are revoked together; one account cannot fill the global pool.
+            for key,value in list(self.values.items()):
+                if value.source_stamp!=stamp:
+                    del self.values[key]
+            own=sorted(((key,value) for key,value in self.values.items() if value.actor==actor),key=lambda item:item[1].created)
+            for key,_ in own[:-4]:
+                del self.values[key]
             if len(self.values) >= 100:
-                raise RuntimeError("Session capacity reached")
+                raise SessionCapacity("Session capacity reached")
             self.values[hashlib.sha256(token.encode()).hexdigest()] = Session(
                 actor, role, data, secrets.token_urlsafe(32), now, now, stamp
             )

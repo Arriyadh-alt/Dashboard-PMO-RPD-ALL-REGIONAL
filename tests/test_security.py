@@ -29,7 +29,8 @@ def test_viewer_cannot_retrieve_customer_rows_or_change_admin_state(signed):
     summary=client.get('/api/analysis').json()
     assert all('individuals' not in team for team in summary['teams'])
     report=client.get('/api/reports/outstanding.csv').content.decode('utf-8-sig')
-    assert '10000006' not in report and 'FIXTURE SURVEYOR' not in report
+    table=report.split('\r\n\r\n',1)[1]
+    assert '10000006' not in table and 'FIXTURE SURVEYOR' not in table
     assert 'Source installation status,Outstanding survey rows' in report
     assert '\r\nCase reference,PAM ID,' not in report
 
@@ -70,7 +71,8 @@ def test_invalid_credentials_are_generic_and_rate_limited(client,encrypted_sourc
     for _ in range(10):
         response=client.post('/api/login',json={'account':'unknown-fixture','password':'not-a-production-secret'})
         assert response.status_code==401
-    assert client.post('/api/login',json={'account':'fixture-admin','password':encrypted_source[1]}).status_code==429
+    assert client.post('/api/login',json={'account':'unknown-fixture','password':'still-wrong'}).status_code==429
+    assert client.post('/api/login',json={'account':'fixture-admin','password':encrypted_source[1]}).status_code==200
 
 
 def test_cookie_flags_and_validation_do_not_echo_passwords(client,encrypted_source):

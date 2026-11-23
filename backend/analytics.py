@@ -57,6 +57,9 @@ def prepare(data):
             raise ValueError(f"Missing data contract field: {key}")
     if not data["months"] or len(data["abs"]) != len(data["reg"]):
         raise ValueError("Invalid month/area data contract")
+    area_keys=[area_key(data,index) for index in range(len(data['abs']))]
+    if len(set(area_keys))!=len(area_keys):
+        raise ValueError('Ambiguous regional/area identities require source reconciliation')
     rec = data["rec"]
     if any(not isinstance(rec.get(key), list) for key in FIELDS):
         raise ValueError("Record columns are missing")
@@ -75,7 +78,7 @@ def prepare(data):
         row["status"] = label(data, "kf", row["kf"]).strip() or "Tidak tercatat"
         row["installed"] = row["status"].casefold() == "done"
         row["cancelled"] = row["status"].casefold() == "cancel"
-        row['area_key'] = area_key(data, row['ab']) if isinstance(row['ab'], int) and 0 <= row['ab'] < len(data['abs']) else 'unmapped'
+        row['area_key'] = area_keys[row['ab']] if isinstance(row['ab'], int) and 0 <= row['ab'] < len(data['abs']) else 'unmapped'
         row["ref"] = case_ref(row)
         if row["valid"]:
             locations[row["pam"]].add((row["ab"], row["kel"]))
@@ -110,7 +113,7 @@ def period_bounds(data, filters):
     return start, end
 
 
-def matches(data, prepared, row, filters, overrides, date_field="date", dates=True):
+def matches(data, prepared, row, filters, overrides, date_field="date", dates=True, bounds=None):
     if not row["valid"]:
         return False
     if filters.get("reg") and data["reg"][row["ab"]] != filters["reg"]:
@@ -124,7 +127,7 @@ def matches(data, prepared, row, filters, overrides, date_field="date", dates=Tr
     if statuses and row["status"] not in statuses:
         return False
     if dates:
-        start, end = period_bounds(data, filters)
+        start, end = bounds if bounds is not None else period_bounds(data, filters)
         value = row[date_field]
         if not value or (start and value < start) or value > end:
             return False
@@ -132,7 +135,16 @@ def matches(data, prepared, row, filters, overrides, date_field="date", dates=Tr
 
 
 def scoped_rows(data, prepared, filters, overrides, date_field="date"):
-    return [row for row in prepared["rows"] if matches(data, prepared, row, filters, overrides, date_field)]
+    bounds=period_bounds(data,filters)
+    statuses=filters.get('statuses',[])
+    base_filters={**filters,'statuses':[]} if statuses else filters
+    rows=[row for row in prepared['rows'] if matches(data,prepared,row,base_filters,overrides,date_field,bounds=bounds)]
+    if not statuses:
+        return rows
+    states=defaultdict(set)
+    for row in rows: states[row['pam']].add((row['interest'],row['status'].casefold()))
+    # Keep source rows searchable, but never let a status filter erase their conflict.
+    return [{**row,'status_conflict':len(states[row['pam']])>1} for row in rows if row['status'] in statuses]
 
 
 def cohort(rows, ambiguous):
@@ -140,20 +152,21 @@ def cohort(rows, ambiguous):
     for row in rows:
         if row["pam"] not in ambiguous:
             grouped[row["pam"]].append(row)
-    interested = installed = conflicted = 0
+    interested = installed = conflicted = pending = 0
     for records in grouped.values():
         interest_values = {record["interest"] for record in records}
         statuses = {record["status"].casefold() for record in records}
-        if len(interest_values) > 1 or len(statuses) > 1:
+        if len(interest_values) > 1 or len(statuses) > 1 or any(record.get('status_conflict') for record in records):
             conflicted += 1
             continue
         interested += int(records[0]["interest"])
         installed += int(records[0]["interest"] and records[0]["installed"])
+        pending += int(records[0]['interest'] and not records[0]['installed'] and not records[0]['cancelled'])
     return {"canvassed": len(grouped), "interested": interested, "installed": installed,
             "interest_rate": ratio(interested, len(grouped)), "installation_rate": ratio(installed, interested),
             "conflicted_status_customers": conflicted,
             "excluded_geography_customers": len({row["pam"] for row in rows if row["pam"] in ambiguous}),
-            "survey_rows": len(rows)}
+            "survey_rows": len(rows), 'pending_customers':pending}
 
 
 def master_stock(data, filters):
@@ -180,8 +193,9 @@ def previous_period(data, prepared, filters):
         serial = start.year * 12 + start.month - 1 - months
         previous_start = date(serial // 12, serial % 12 + 1, 1)
         previous_end = start - timedelta(days=1)
-    known_dates = [row["date"] for row in prepared["rows"] if row["date"]]
-    if not known_dates or previous_start < min(known_dates):
+    known_dates = [row["date"] for row in prepared["rows"] if row['valid']]
+    first_month=date.fromisoformat(data['months'][0]+'-01')
+    if not known_dates or previous_start < max(min(known_dates),first_month) or previous_end > max(known_dates):
         return None
     return {**filters, "start": previous_start.isoformat(), "end": previous_end.isoformat()}
 
@@ -210,7 +224,7 @@ def priority(metrics, context, rules):
         return "Insufficient Data", "Supply dan kesiapan pemasangan belum dikonfirmasi; bukan rekomendasi canvassing."
     if metrics["canvassed"] < rules["minimum_sample"]:
         return "Insufficient Data", "Sampel pelanggan di bawah batas minimum."
-    backlog = metrics["interested"] - metrics["installed"]
+    backlog = metrics['pending_customers']
     if (metrics["interest_rate"] or 0) < rules["cooling_interest_rate"]:
         return "Cooling Down", "Konversi minat di bawah ambang; tinjau kondisi area terlebih dahulu."
     if (ratio(backlog, metrics["interested"]) or 0) >= rules["high_backlog_rate"]:
@@ -228,6 +242,10 @@ def build_analysis(data, prepared, filters, store, role):
     regions, areas, teams = [], [], []
     rules = {**DEFAULT_RULES, **store.latest("rules").get("all", {})}
     contexts = store.latest("area_context")
+    by_area,by_region=defaultdict(list),defaultdict(list)
+    for row in rows:
+        by_area[row['ab']].append(row)
+        by_region[data['reg'][row['ab']]].append(row)
     for kind, destinations, values in (("region", regions, sorted(set(data["reg"]))),
                                         ("area", areas, range(len(data["abs"])))):
         for value in values:
@@ -236,7 +254,7 @@ def build_analysis(data, prepared, filters, store, role):
             if kind == "area" and ((filters.get("reg") and data["reg"][value] != filters["reg"])
                                    or (int(filters.get("ab", -1)) >= 0 and value != int(filters["ab"]))):
                 continue
-            subset = [row for row in rows if (data["reg"][row["ab"]] == value if kind == "region" else row["ab"] == value)]
+            subset=(by_region if kind=='region' else by_area).get(value,[])
             group_filters = {**filters, **({"reg": value} if kind == "region" else {"ab": value})}
             group = cohort(subset, prepared["ambiguous"])
             group_stock = master_stock(data, group_filters)
@@ -263,7 +281,9 @@ def build_analysis(data, prepared, filters, store, role):
                  "active_surveyors": sum(overrides.get(data["svs"][sv], {}).get("st", data["st"][sv]) == 0 for sv in surveyors),
                  "observed_surveyor_days": activity_days, "interested_per_observed_day": ratio(group["interested"], activity_days)}
         if role == "owner":
-            entry["individuals"] = [{"name": data["svs"][sv], **cohort([row for row in records if row["sv"] == sv], prepared["ambiguous"])} for sv in sorted(surveyors)]
+            by_surveyor=defaultdict(list)
+            for row in records: by_surveyor[row['sv']].append(row)
+            entry["individuals"] = [{"name": data["svs"][sv], **cohort(by_surveyor[sv], prepared["ambiguous"])} for sv in sorted(surveyors)]
         teams.append(entry)
     trends = defaultdict(list)
     install_events = defaultdict(set)

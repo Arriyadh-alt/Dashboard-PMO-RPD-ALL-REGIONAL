@@ -18,11 +18,13 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .analytics import (DEFAULT_RULES, area_key, build_analysis, coordinator, label, matches, period_bounds,
                         prepare, quality, record_view, scoped_rows, target_ref)
-from .auth import Sessions, decrypt_source, user_key
+from .auth import Sessions, SessionCapacity, user_key
+from .source import RotationRequired, SourceCache
 from .exports import TITLES, make_report
 from .store import Store, now_iso
 
 ROOT = Path(__file__).resolve().parent.parent
+PUBLIC = ROOT / 'web'
 
 
 class StrictModel(BaseModel):
@@ -106,6 +108,7 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
     store = Store(state_dir / "operations.sqlite3")
     (state_dir / "operations.sqlite3").chmod(0o600)
     sessions = Sessions()
+    source_cache=SourceCache()
     app = FastAPI(title="Private RPD service", docs_url=None, redoc_url=None, openapi_url=None)
     host = urlsplit(origin).hostname
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=[host] if host else ["localhost", "127.0.0.1"])
@@ -187,23 +190,17 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
     def login(body: Login, request: Request, response: Response):
         if not origin or not source_path.is_file() or (not dev and not origin.startswith("https://")):
             raise HTTPException(503, "Backend privat belum dikonfigurasi. GitHub Pages tidak menyediakan akses data.")
-        peer = request.client.host if request.client else "unknown"
+        peer = (request.client.host if request.client else 'unknown', user_key(body.account))
         if sessions.limited(peer) or not sessions.login_slots.acquire(blocking=False):
             raise HTTPException(429, "Terlalu banyak percobaan. Coba kembali setelah 15 menit.")
         try:
             stamp = source_stamp()
-            source, role = decrypt_source(source_path, body.account, body.password)
-            prepared = prepare(source)
-            fingerprint = hashlib.sha256(source_path.read_bytes()).hexdigest()
-            manifest = source_path.with_suffix(source_path.suffix + ".manifest.json")
-            imported_at = None
-            if manifest.is_file():
-                metadata = json.loads(manifest.read_text())
-                if metadata.get("fingerprint") == fingerprint:
-                    imported_at = metadata.get("imported_at")
-            data = {"source": source, "prepared": prepared,
-                    "info": {"fingerprint": fingerprint, "loaded_at": now_iso(), "imported_at": imported_at}}
+            data,role=source_cache.authenticate(source_path,body.account,body.password,stamp,allow_legacy=dev)
             token = sessions.create(user_key(body.account), role, data, stamp)
+        except RotationRequired:
+            raise HTTPException(503,'Rotasi kredensial dan kunci sumber legacy diperlukan sebelum akses produksi. Lihat panduan cutover.')
+        except SessionCapacity:
+            raise HTTPException(503,'Kapasitas sesi sementara penuh. Coba kembali nanti.')
         except (OSError, json.JSONDecodeError):
             raise HTTPException(503, "Sumber data privat tidak tersedia.")
         except Exception:
@@ -369,13 +366,13 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
 
     @app.get("/")
     def index():
-        return FileResponse(ROOT / "index.html")
+        return FileResponse(PUBLIC / "index.html")
 
     @app.get("/{asset}")
     def asset(asset: str):
         if asset not in ("app.js", "command-center.js", "styles.css", "command-center.css"):
             raise HTTPException(404)
-        return FileResponse(ROOT / asset)
+        return FileResponse(PUBLIC / asset)
 
     return app
 

@@ -67,8 +67,22 @@ def import_source(input_path, output_path, legacy_html=False):
     manifest = {"fingerprint": fingerprint, "imported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "validation": "Encrypted envelope only; authorized business-data validation required."}
     path = output.with_suffix(output.suffix + ".manifest.json")
-    path.write_text(json.dumps(manifest, indent=2))
-    path.chmod(0o600)
+    descriptor,temporary=tempfile.mkstemp(dir=output.parent,prefix='.rpd-manifest-')
+    try:
+        with os.fdopen(descriptor,'w') as file:
+            json.dump(manifest,file,indent=2)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temporary,path)
+    finally:
+        if os.path.exists(temporary): os.unlink(temporary)
+    log_path=output.with_suffix(output.suffix+'.imports.jsonl')
+    descriptor=os.open(log_path,os.O_CREAT|os.O_APPEND|os.O_WRONLY,0o600)
+    try:
+        os.write(descriptor,(json.dumps(manifest)+'\n').encode())
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
     return manifest
 
 

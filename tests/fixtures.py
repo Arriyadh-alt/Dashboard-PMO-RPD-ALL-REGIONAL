@@ -54,7 +54,7 @@ def encrypted_fixture(data, accounts):
     """Accounts are supplied at runtime, never embedded in a deployed application."""
     b64 = lambda value:base64.b64encode(value).decode()
     data_key, iv = os.urandom(32), os.urandom(12)
-    envelope = {"u":{},"i":b64(iv),"c":b64(AESGCM(data_key).encrypt(iv,gzip.compress(json.dumps(data).encode()),None))}
+    envelope = {'v':2,"u":{},"i":b64(iv),"c":b64(AESGCM(data_key).encrypt(iv,gzip.compress(json.dumps(data).encode()),None))}
     for account,(password,role) in accounts.items():
         account=''.join(account.split()).lower()
         salt, nonce = os.urandom(16), os.urandom(12)

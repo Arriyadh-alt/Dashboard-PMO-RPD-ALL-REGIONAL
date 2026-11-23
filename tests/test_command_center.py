@@ -70,7 +70,7 @@ def test_unique_cohort_does_not_count_duplicates_or_conflicting_geography(signed
     result = client.get("/api/analysis").json()
     assert result["metrics"] == {"canvassed": 9, "interested": 6, "installed": 3,
         "interest_rate": 6/9, "installation_rate": .5, "conflicted_status_customers": 1,
-        "excluded_geography_customers": 1, "survey_rows": 13}
+        "excluded_geography_customers": 1, "survey_rows": 13, 'pending_customers':3}
     assert result["master"]["potential"] == 150 and result["master"]["remaining"] == 125
     assert result["previous"] is None and not result["target"]["available"]
 
@@ -166,10 +166,36 @@ def test_stale_mapping_snapshot_cannot_overwrite_another_administrator(signed):
 
 
 def test_priority_does_not_assume_remaining_potential_means_readiness():
-    metrics={"canvassed":100,"interested":40,"installed":10,"interest_rate":.4}
+    metrics={"canvassed":100,"interested":40,"installed":10,"interest_rate":.4,'pending_customers':30}
     assert priority(metrics,{},DEFAULT_RULES)[0] == "Insufficient Data"
     assert priority(metrics,{"supply":"ready","readiness":"ready"},DEFAULT_RULES)[0] == "High Priority"
 
+
+def test_status_filter_cannot_hide_a_duplicate_customer_conflict(signed):
+    client,_=signed()
+    overall=client.get('/api/analysis').json()['metrics']
+    filtered=client.get('/api/analysis?status=Done').json()['metrics']
+    assert filtered['installed']==overall['installed']==3
+    assert filtered['conflicted_status_customers']==1
+
+
+def test_cancelled_customers_do_not_create_priority_backlog():
+    from backend.analytics import cohort
+    data=fixture_data()
+    data['rec']['kf']=[4 if interest==1 else status for interest,status in zip(data['rec']['c1'],data['rec']['kf'])]
+    prepared=prepare(data)
+    metrics=cohort(prepared['rows'],prepared['ambiguous'])
+    assert metrics['interested']>0 and metrics['pending_customers']==0
+    assert priority(metrics,{'supply':'ready','readiness':'ready'},{**DEFAULT_RULES,'minimum_sample':1})[0]=='Low Priority'
+
+
+def test_opening_bucket_outlier_does_not_invent_previous_month_coverage(tmp_path):
+    data=fixture_data()
+    for values in data['rec'].values(): values.append(values[0])
+    data['rec']['pam'][-1]=10000012
+    data['rec']['t'][-1]=200105
+    report=build_analysis(data,prepare(data),{'m0':1,'m1':2},Store(tmp_path/'state.sqlite3'),'owner')
+    assert report['previous'] is None
 
 @pytest.mark.parametrize("kind",["executive","regional","area","team","outstanding"])
 @pytest.mark.parametrize("extension",["csv","xlsx","pdf"])

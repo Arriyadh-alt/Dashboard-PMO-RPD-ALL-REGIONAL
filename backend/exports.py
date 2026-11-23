@@ -2,6 +2,7 @@
 
 import csv
 import io
+from datetime import date
 from xml.sax.saxutils import escape
 
 from openpyxl import Workbook
@@ -54,8 +55,28 @@ def report_table(kind, analysis, data, prepared, filters, store, role):
             entry = record_view(data, prepared, row, overrides, actions.get(row["ref"]))
             action = entry["followup"] or {}
             rows.append([entry["ref"], entry["pam"], entry["regional"], entry["area"], entry["status"],
-                         entry["coordinator"], action.get("pic", ""), action.get("target_date", ""), action.get("action", "")])
-    return ["Case reference", "PAM ID", "Region", "Area", "Source status", "Coordinator", "Follow-up PIC", "Target date", "Latest action"], rows
+                         entry["coordinator"], action.get("pic", ""), action.get("target_date", ""), action.get("action", ""),
+                         action.get('status','Not recorded'),action.get('resolution_notes',''),action.get('case_started',''),action.get('pause_days',0),
+                         'Resolved since import' if action.get('status','').casefold() in ('done','cancel') else 'Active',
+                         aging_value(action,date.fromisoformat(analysis['outstanding']['aging_as_of']))])
+    return ["Case reference", "PAM ID", "Region", "Area", "Source status", "Coordinator", "Follow-up PIC", "Target date", "Latest action",
+            'Follow-up status','Resolution notes','Confirmed case start','Verified pause days','Operational state','Active aging days'], rows
+
+
+def aging_value(action,today):
+    if action.get('status','').casefold() in ('done','cancel'):
+        return 'Resolved since import'
+    return max(0,(today-date.fromisoformat(action['case_started'])).days-action.get('pause_days',0)) if action.get('case_started') else 'Insufficient Data'
+
+
+def filter_labels(data,filters):
+    area,kel=int(filters.get('ab',-1)),int(filters.get('kel',-1))
+    return ' | '.join([
+        'Regional: '+(filters.get('reg') or 'All'),
+        'Area: '+(data['abs'][area] if area>=0 else 'All'),
+        'Kelurahan: '+(data['kels'][kel] if kel>=0 else 'All'),
+        'Coordinator: '+(filters.get('coordinator') or 'All'),
+        'Source status: '+(', '.join(filters.get('statuses',[])) or 'All')])
 
 
 def safe_cell(value):
@@ -70,7 +91,7 @@ def make_report(kind, extension, analysis, data, prepared, filters, store, role,
         raise ValueError("Laporan terlalu besar; persempit filter sebelum ekspor. Tidak ada baris yang dipotong diam-diam.")
     scope = analysis["scope"]
     metadata = [TITLES[kind], f"Survey period: {scope['start'] or 'all available through'} – {scope['end']}",
-                "Filters: " + str(filters), "Last successful import: " + (source.get("imported_at") or "Insufficient Data"),
+                "Filters: " + filter_labels(data,filters), "Last successful import: " + (source.get("imported_at") or "Insufficient Data"),
                 "Source loaded at: " + source["loaded_at"], "Source fingerprint: " + source["fingerprint"],
                 DEFINITION, scope["history"], "Role: " + role]
     if extension == "csv":

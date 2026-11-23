@@ -4,16 +4,16 @@ An incremental extension of the existing RPD dashboard: the original operational
 
 ## Deployment is intentionally gated
 
-**This branch is not a GitHub Pages production deployment.** GitHub Pages cannot execute the required private backend. Do not merge/cut over until the private host, encrypted input, authorized source validation and operational sign-off are ready. No service, database, domain or paid resource is automatically provisioned by this repository.
+**This branch is not a private-service production deployment.** GitHub Pages cannot execute the required backend. The existing root `index.html` is frozen byte-for-byte, so merging this increment does not replace the live dashboard. The new service serves only `web/`, never that legacy root file. Do not cut over until the private host, rotated encrypted input, authorized source validation and operational sign-off are ready. No service, database, domain or paid resource is automatically provisioned by this repository.
 
-The public HTML has no customer payload. Running it with a static file server shows the login shell and a backend-required message; it cannot unlock private data. The existing encrypted source was not modified. Migrate it out of the previous HTML into private storage using the import tool below.
+The new service HTML in `web/` has no customer payload. Serving that directory statically shows a backend-required login shell; it cannot unlock private data. The frozen legacy Pages file retains its previously published ciphertext because the owner explicitly required the live site to remain unchanged. Import that ciphertext unchanged for archival, then rotate into a new private generation before enabling production service access.
 
 ## Local service
 
-Python 3.10+ is required; Python 3.12 is used in CI and the container. There is no frontend build step.
+Python 3.12+ is required and used in CI and the container. There is no frontend build step.
 
 ```sh
-python3 -m venv .venv
+python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements-dev.txt
 ```
 
@@ -24,7 +24,15 @@ Import the existing encrypted envelope or the previous single-file HTML into a d
 # Or: scripts/import_encrypted.py /secure/source.enc.json /secure/rpd/current.enc.json
 ```
 
-The command copies ciphertext unchanged, validates its envelope, archives content-addressed encrypted snapshots, and records an explicit import timestamp. Only an authorized sign-in can validate the decrypted business contract. Never move a decrypted workbook, real credential, private SQLite database or encrypted production input into the public repository.
+The command copies ciphertext unchanged, validates its envelope, archives content-addressed encrypted snapshots, and records an explicit import timestamp plus append-only import history. Only an authorized sign-in can validate the decrypted business contract. Never add a decrypted workbook, real credential, private SQLite database or new encrypted production input to this public repository.
+
+Production rejects legacy account envelopes. Prepare a private generation with a new data key and fresh accounts (passwords are entered through hidden prompts, never command-line arguments):
+
+```sh
+.venv/bin/python -m scripts.rekey_encrypted /secure/rpd/legacy.enc.json /secure/rpd/current.enc.json --administrator NEW_ADMIN --viewer NEW_VIEWER
+```
+
+An authorized legacy administrator is required. Business data is preserved; all new account wrappers/data keys are generated again. Original encrypted snapshots remain unchanged. Old account passwords must not be reused. This protects the new service, **not historical copies**: the old page/history can still be decrypted with old credentials until an independently approved legacy retirement/history policy is executed. Repeat the private-generation preparation for any subsequent legacy import; no automatic workbook synchronization is implied.
 
 For loopback development only:
 
@@ -40,8 +48,8 @@ Open the loopback URL in the same browser machine. Use an existing authorized ac
 
 1. Choose a private host and persistent, encrypted-at-rest volume; put encrypted input, import manifests, snapshot archives and the SQLite ledger outside any web root. Set volume ownership to the service user (container UID 10001 if using the supplied Dockerfile).
 2. Set `RPD_PUBLIC_ORIGIN` to the exact HTTPS origin, `RPD_DATA_PATH`, `RPD_STATE_DIR`, and optionally `RPD_DATA_OWNER`. Serve this application and its API under that same origin, at the origin root.
-3. Put an HTTPS reverse proxy in front of the service. Preserve the public `Host`, forward the correct origin, restrict trusted forwarded IPs to that proxy, set a 32 KiB request-body cap, and redact query strings from proxy logs. Do not expose the backend port directly.
-4. Run **one Uvicorn worker**. Sessions and throttling are process-local; restarts revoke sessions. Horizontal scaling needs a shared server-side session/rate-limit store first. Place an additional rate limit at the trusted proxy for internet-facing installations.
+3. Put an HTTPS reverse proxy in front of the service. Preserve the public `Host`, forward the correct origin, set `FORWARDED_ALLOW_IPS` to the real trusted proxy IP(s) (never `*`), set a 32 KiB request-body cap, and redact query strings from proxy logs. The default trusts loopback only; container proxies need an explicit address. Do not expose the backend port directly.
+4. Run **one Uvicorn worker**. Sessions and per-peer/account throttling are process-local; restarts revoke sessions. Each account retains at most five sessions. The decrypted dataset is shared privately per import, not copied per login. Horizontal scaling needs a shared session/rate-limit store first. Place an additional rate limit at the trusted proxy for internet-facing installations.
 5. Back up the SQLite database using SQLite's online backup API (not a live `.sqlite3` file copy without its WAL), plus the encrypted snapshots/manifests. Verify restore under the same service identity.
 6. Check an authorized administrator and aggregate viewer, real totals against the source workbook, duplicates/conflicts, permissions, refresh imports, PDF/XLSX/CSV scope, and follow-up persistence before cutover. A source-file replacement invalidates old sessions on their next request.
 7. Coordinate credential/data-key rotation at cutover: older Git history contains the previously published ciphertext. This migration does not erase that history or revoke old encrypted copies. Do not rewrite repository history without explicit owner approval.
@@ -71,8 +79,9 @@ Missing target calendars, verified case starts/pauses, attendance, state snapsho
 ```sh
 .venv/bin/python -m pytest -q
 .venv/bin/python scripts/check_public.py
-node --check app.js
-node --check command-center.js
+node --check web/app.js
+node --check web/command-center.js
+.venv/bin/python -m pip_audit --progress-spinner off
 ```
 
 Tests use a deliberately synthetic source with duplicate PAM IDs, conflicting geography/status, missing IDs, real event-date versus survey-date distinctions, and both role envelopes. For UI verification, the test-only generator can create a private synthetic fixture; it requires runtime `RPD_FIXTURE_ADMIN_PASSWORD` and `RPD_FIXTURE_VIEWER_PASSWORD` and writes only outside the repository:

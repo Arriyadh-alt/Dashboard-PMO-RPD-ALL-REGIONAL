@@ -2,6 +2,9 @@
 let A = null, CSRF = '', SOURCE = {}, CAP = {}, BOOT = {}, QUALITY = null, ADMIN = null;
 let analysisRevision = 0, viewRevision = 0, searchRevision = 0, searchTimer, PAGE = 0;
 let CURRENT_ROWS = [], CASE = null, caseReturnFocus = null, regionSort = 'installation_rate', trendUnit = 'monthly';
+let renderedTab='';const legacyPanels=new Map();
+
+function rememberLegacyPanel(){const panel=document.querySelector('#main .legacy-report');if(panel&&renderedTab)legacyPanels.set(renderedTab,panel.open)}
 const PAGE_SIZE = 50;
 const pageTitles = {ringkasan:'Executive Overview', analytics:'Performance Analytics', kelurahan:'Regional & Area Intelligence', korlap:'Team Performance', outstanding:'Outstanding & Follow-up', data:'Customer Lookup', catatan:'Data Quality & Administration'};
 const unavailable = 'Insufficient Data';
@@ -37,7 +40,7 @@ function init(payload) {
   BOOT=payload;D=payload.data;ROLE=payload.role;CSRF=payload.csrf;SOURCE=payload.source;CAP=payload.capabilities;OV=payload.overrides;WM=null;
   Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,coordinator:'',statuses:[],start:'',end:'',tab:'ringkasan',q:'',open:'',all:0});
   $('#lg').hidden=true;$('#app').hidden=false;$('#out').hidden=false;$('#role').textContent=ROLE==='owner'?'Administrator':'Aggregate viewer';
-  $('#sub').textContent='Kohort survei '+fd(D.meta.tmin)+' – '+fd(D.meta.tmax)+' · Metrik unik dan stok master dibedakan.';
+  $('#sub').textContent=(BOOT.data_owner?BOOT.data_owner+' · ':'')+'Kohort survei '+fd(D.meta.tmin)+' – '+fd(D.meta.tmax)+' · Metrik unik dan stok master dibedakan.';
   $('#lp').value='';$('#li').value='';fill();refresh();$('#main').focus({preventScroll:true});
 }
 
@@ -56,7 +59,7 @@ async function go() {
 }
 
 async function refresh() {
-  if(!D)return;const revision=++analysisRevision;viewRevision++;searchRevision++;A=null;PAGE=0;setStatus('');fill();
+  if(!D)return;rememberLegacyPanel();const revision=++analysisRevision;viewRevision++;searchRevision++;A=null;PAGE=0;setStatus('');fill();
   $('#main').setAttribute('aria-busy','true');$('#main').innerHTML=skeleton();
   try {const result=await api('/api/analysis?'+params());if(revision!==analysisRevision||!D)return;A=result;render()}
   catch(error){if(revision!==analysisRevision)return;setStatus(error.message);$('#main').innerHTML=blank('Laporan belum tersedia','Ubah filter atau coba kembali. Tidak ada hasil lama yang ditampilkan sebagai hasil filter baru.')+'<p><button id="retry-analysis">Coba kembali</button></p>'}
@@ -207,7 +210,7 @@ function qualityContent() {
 
 function adminContent() {
   const rules=ADMIN.rules;
-  return `<details><summary>Target pemasangan bulanan</summary><p class="mu sm">Target hanya dibandingkan untuk bulan penuh dan cakupan yang persis sama. Input berdasarkan dokumen target yang sah.</p><form class="admin-form" id="target-form"><label class="field">Bulan<select name="month">${D.months.map(month=>option(month,month,month===D.months[S.m1])).join('')}</select></label><label class="field">Target PAM terpasang<input name="target" type="number" min="1" max="10000000" required></label><label class="field">Cakupan aktif<input value="${esc(S.ab>=0?D.abs[S.ab]:S.reg||'Seluruh regional')}" readonly></label><label class="field wide">Bukti / dokumen target<input name="evidence" maxlength="1000" required></label><button>Simpan target dengan audit</button><p class="form-status" role="status"></p></form><h2>Target aktif</h2>${dataTable(['Bulan','Regional / area','Target','Bukti'],Object.values(ADMIN.targets).map(item=>[esc(item.month),esc(item.area>=0?D.abs[item.area]:item.region||'Seluruh regional'),N(item.target),esc(item.evidence)]))}</details>
+  return `<details><summary>Target pemasangan bulanan</summary><p class="mu sm">Target hanya dibandingkan untuk bulan penuh dan cakupan yang persis sama. Input berdasarkan dokumen target yang sah.</p><form class="admin-form" id="target-form"><label class="field">Bulan<select name="month">${D.months.map(month=>option(month,month,month===D.months[S.m1])).join('')}</select></label><label class="field">Target PAM terpasang<input name="target" type="number" min="1" max="10000000" required></label><label class="field">Cakupan aktif<input value="${esc(S.ab>=0?D.abs[S.ab]:S.reg||'Seluruh regional')}" readonly></label><label class="field wide">Bukti / dokumen target<input name="evidence" maxlength="1000" required></label><button>Simpan target dengan audit</button><p class="form-status" role="status"></p></form><h2>Target aktif</h2>${dataTable(['Bulan','Regional / area','Target','Bukti'],Object.values(ADMIN.targets).map(item=>[esc(item.month),esc(item.area_name||item.region||'Seluruh regional'),N(item.target),esc(item.evidence)]))}</details>
   <details><summary>Aturan prioritas transparan</summary><form class="admin-form" id="rules-form"><label class="field">Minimum PAM unik<input name="minimum_sample" type="number" min="1" max="100000" value="${rules.minimum_sample}" required></label><label class="field">High backlog rate (0–1)<input name="high_backlog_rate" type="number" step="0.01" min="0.01" max="1" value="${rules.high_backlog_rate}" required></label><label class="field">Cooling interest rate (0–1)<input name="cooling_interest_rate" type="number" step="0.01" min="0" max="1" value="${rules.cooling_interest_rate}" required></label><button>Simpan aturan</button><p class="form-status" role="status"></p></form></details>
   <details><summary>Supply &amp; installation readiness terverifikasi</summary><form class="admin-form" id="context-form"><label class="field">Area bisnis<select name="area">${D.abs.map((name,i)=>option(i,name,i===S.ab)).join('')}</select></label><label class="field">Supply<select name="supply"><option value="unknown">Unknown</option><option value="ready">Ready</option><option value="constrained">Constrained</option></select></label><label class="field">Kesiapan pemasangan<select name="readiness"><option value="unknown">Unknown</option><option value="ready">Ready</option><option value="blocked">Blocked</option></select></label><label class="field wide">Bukti aktual / referensi<input name="evidence" maxlength="1000" required></label><button>Simpan konteks area</button><p class="form-status" role="status"></p></form><h2>Konteks area aktif</h2>${dataTable(['Area','Supply','Readiness','Bukti'],Object.entries(ADMIN.area_context).map(([key,value])=>[esc(D.abs[+key]||key),esc(value.supply),esc(value.readiness),esc(value.evidence)]))}</details>
   <h2>Audit log · perubahan terbaru</h2>${ADMIN.events.length?ADMIN.events.map(event=>`<div class="history-entry"><strong>${esc(event.kind)} · ${esc(event.ref)}</strong><p>${esc(JSON.stringify(event.payload))}</p><small>${esc(timeLabel(event.at))} · actor ${esc(event.actor)} · event ${event.id}</small></div>`).join(''):'<p class="mu sm">Belum ada perubahan.</p>'}`;
@@ -220,11 +223,12 @@ async function loadGovernance(revision) {
 }
 
 function render() {
-  if(!D)return;const revision=++viewRevision;
+  if(!D)return;rememberLegacyPanel();const revision=++viewRevision;
   document.querySelectorAll('.tabs button').forEach(button=>{const active=button.dataset.tab===S.tab;button.setAttribute('aria-selected',active);button.tabIndex=active?0:-1});
   $('#page-title').textContent=pageTitles[S.tab];$('#main').setAttribute('aria-labelledby','tab-'+S.tab);
   if(!A){$('#main').innerHTML=skeleton();return}
   $('#main').innerHTML=({ringkasan:vExecutive,analytics:vAnalytics,kelurahan:vRegional,korlap:vTeam,outstanding:vOutstanding,data:vData,catatan:vGovernance})[S.tab]();
+  renderedTab=S.tab;const legacy=document.querySelector('#main .legacy-report');if(legacy&&legacyPanels.has(S.tab))legacy.open=legacyPanels.get(S.tab);if(ROLE!=='owner')$('#pdf')?.remove();
   if(S.tab==='kelurahan')kt();if(['data','outstanding'].includes(S.tab))dt();if(S.tab==='catatan')loadGovernance(revision);
   document.querySelectorAll('th[data-i]').forEach(cell=>{cell.tabIndex=0;cell.setAttribute('role','button');cell.setAttribute('aria-label','Urutkan '+cell.textContent.trim())});
   const reports={ringkasan:'executive',analytics:'executive',kelurahan:'area',korlap:'team',outstanding:'outstanding'};if(reports[S.tab])$('#report-kind').value=reports[S.tab];
@@ -237,14 +241,14 @@ async function svOv(previous) {
 
 async function openCase(index,trigger) {
   CASE=CURRENT_ROWS[index];if(!CASE)return;caseReturnFocus=trigger;
-  let dialog=$('#case-dialog');if(!dialog){dialog=document.createElement('dialog');dialog.id='case-dialog';dialog.setAttribute('aria-labelledby','case-title');document.body.appendChild(dialog);dialog.addEventListener('close',()=>{CASE=null;if(D&&A)render();if(caseReturnFocus?.isConnected)caseReturnFocus.focus();else if(D)$('#main').focus({preventScroll:true})})}
+  let dialog=$('#case-dialog');if(!dialog){dialog=document.createElement('dialog');dialog.id='case-dialog';dialog.setAttribute('aria-labelledby','case-title');document.body.appendChild(dialog);dialog.addEventListener('close',()=>{const ref=CASE?.ref;CASE=null;if(!D)return;const index=CURRENT_ROWS.findIndex(row=>row.ref===ref),replacement=index>=0?document.querySelector(`#main [data-case="${index}"]`):null;if(caseReturnFocus?.isConnected)caseReturnFocus.focus();else if(replacement)replacement.focus();else $('#main').focus({preventScroll:true})})}
   const row=CASE,latest=row.followup||{};
   dialog.innerHTML=`<div class="dialog-header"><h2 id="case-title">PAM ${esc(row.pam)} · follow-up</h2><button id="close-case" aria-label="Tutup detail kasus">Tutup</button></div><div class="dialog-content"><p class="mu sm">${esc(row.ref)} · ${esc(row.area)} · status sumber ${esc(row.status)}</p><form id="followup-form" class="admin-form"><label class="field">PIC penanggung jawab<input name="pic" maxlength="150" value="${esc(latest.pic||row.coordinator)}" required></label><label class="field">Status tindak lanjut (terpisah)<select name="status">${D.dic.kf.filter(Boolean).concat(D.dic.kf.includes('Tidak tercatat')?[]:['Tidak tercatat']).map(status=>option(status,status,status===(latest.status||row.status))).join('')}</select></label><label class="field">Target selesai<input name="target_date" type="date" value="${esc(latest.target_date||'')}"></label><label class="field wide">Aksi tindak lanjut<textarea name="action" maxlength="2000" required></textarea></label><label class="field wide">Catatan resolusi<textarea name="resolution_notes" maxlength="2000">${esc(latest.resolution_notes||'')}</textarea></label><label class="field">Awal kasus terkonfirmasi<input name="case_started" type="date" value="${esc(latest.case_started||'')}" max="${new Date().toISOString().slice(0,10)}"></label><label class="field">Total hari jeda terverifikasi<input name="pause_days" type="number" min="0" max="36500" value="${latest.pause_days||0}"></label><label class="field">Alasan jeda<input name="pause_reason" maxlength="500" value="${esc(latest.pause_reason||'')}"></label><button>Tambahkan ke riwayat</button><p class="form-status" role="status"></p></form><p class="mu sm">Awal kasus dan jeda memerlukan bukti operasional. Tidak diambil otomatis dari tanggal survei. Aksi baru tidak menghapus aksi sebelumnya.</p><h2>Riwayat tindakan</h2><div id="case-history">${skeleton()}</div></div>`;
   dialog.showModal();await loadCaseHistory(row.ref);
 }
 
-async function loadCaseHistory(ref) {
-  try {const history=await api('/api/followups/'+encodeURIComponent(ref));if(!CASE||CASE.ref!==ref)return;$('#case-history').innerHTML=history.events.length?history.events.map(event=>`<article class="history-entry"><strong>${esc(event.payload.pic)} · ${esc(event.payload.status)}</strong><p>${esc(event.payload.action)}</p><p>Tenggat: ${esc(event.payload.target_date||'Tidak ditetapkan')} · Resolusi: ${esc(event.payload.resolution_notes||'–')}</p><small>${esc(timeLabel(event.at))} · actor ${esc(event.actor)} · event ${event.id}</small></article>`).join(''):'<p class="mu sm">Belum ada tindakan tersimpan.</p>'}
+async function loadCaseHistory(ref,before=null) {
+  try {const history=await api('/api/followups/'+encodeURIComponent(ref)+(before?'?before='+before:''));if(!CASE||CASE.ref!==ref)return;const container=$('#case-history'),markup=history.events.length?history.events.map(event=>`<article class="history-entry"><strong>${esc(event.payload.pic)} · ${esc(event.payload.status)}</strong><p>${esc(event.payload.action)}</p><p>Tenggat: ${esc(event.payload.target_date||'Tidak ditetapkan')} · Resolusi: ${esc(event.payload.resolution_notes||'–')}</p><small>${esc(timeLabel(event.at))} · actor ${esc(event.actor)} · event ${event.id}</small></article>`).join(''):'<p class="mu sm">Belum ada tindakan tersimpan.</p>';if(before){container.querySelector('[data-history-before]')?.remove();container.insertAdjacentHTML('beforeend',markup)}else container.innerHTML=markup;if(history.next_before)container.insertAdjacentHTML('beforeend',`<button data-history-before="${history.next_before}">Muat riwayat lebih lama</button>`)}
   catch(error){if(CASE?.ref===ref)$('#case-history').textContent=error.message}
 }
 
@@ -256,7 +260,7 @@ document.addEventListener('submit',async event=>{
   if(form.id==='rules-form'){path='/api/admin/rules';method='PUT';for(const key of Object.keys(values))values[key]=+values[key]}
   if(form.id==='context-form'){path='/api/admin/area-context';values.area=+values.area}
   try {await api(path,{method,body:JSON.stringify(values)});ADMIN=null;status.textContent='Tersimpan di backend; riwayat sebelumnya tetap ada.';
-    if(form.id==='followup-form'){form.elements.action.value='';await loadCaseHistory(ref);const result=await api('/api/analysis?'+params());A=result;await dt()}
+    if(form.id==='followup-form'){if(CASE?.ref===ref){form.elements.action.value='';await loadCaseHistory(ref)}if(D)await refresh()}
     else await refresh();
   }catch(error){status.textContent=error.message}finally{button.disabled=false}
 });
@@ -297,6 +301,7 @@ document.addEventListener('click',async event=>{
   if(target.id==='page-prev'||target.id==='page-next'){PAGE+=target.id==='page-next'?1:-1;dt();return}
   if(target.dataset.case!==undefined){await openCase(+target.dataset.case,target);return}
   if(target.id==='close-case'){$('#case-dialog').close();return}
+  if(target.dataset.historyBefore&&CASE){target.disabled=true;try{await loadCaseHistory(CASE.ref,+target.dataset.historyBefore)}finally{if(target.isConnected)target.disabled=false}return}
   if(target.id==='pdf'){try{await download('/api/legacy-report.pdf','RPD-all-surveyors-unfiltered.pdf')}catch(error){setStatus(error.message)}return}
   if(target.id==='ovx'){const previous=OV;OV={};await svOv(previous);return}
   if(target.id==='all'){S.all=1;render();return}
