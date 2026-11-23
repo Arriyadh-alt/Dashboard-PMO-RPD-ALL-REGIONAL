@@ -57,6 +57,16 @@ class Store:
             rows = db.execute("SELECT * FROM events" + where + " ORDER BY id DESC LIMIT ?", (*params, limit)).fetchall()
         return [{**dict(row), "payload": json.loads(row["payload"])} for row in rows]
 
+    def append_if_current(self, kind, ref, actor, payload, expected):
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row=db.execute('SELECT MAX(id) AS id FROM events WHERE kind=? AND ref=?',(kind,ref)).fetchone()
+            if (row['id'] or 0)!=expected:
+                raise ValueError('State changed since it was loaded')
+            cursor=db.execute('INSERT INTO events(kind,ref,actor,at,payload) VALUES(?,?,?,?,?)',
+                              (kind,ref,actor,now_iso(),json.dumps(payload,ensure_ascii=False)))
+            return cursor.lastrowid
+
     def latest(self, kind):
         with self.connect() as db:
             rows = db.execute("""SELECT e.* FROM events e JOIN

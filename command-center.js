@@ -231,8 +231,8 @@ function render() {
 }
 
 async function svOv(previous) {
-  try {await api('/api/admin/mappings',{method:'PUT',body:JSON.stringify(OV)});ADMIN=null;await refresh()}
-  catch(error){OV=previous;render();setStatus(error.message)}
+  try {const result=await api('/api/admin/mappings',{method:'PUT',body:JSON.stringify({version:BOOT.mapping_version,values:OV})});BOOT.mapping_version=result.version;ADMIN=null;await refresh()}
+  catch(error){OV=previous;if(D){try{const current=await api('/api/bootstrap');OV=current.overrides;BOOT.mapping_version=current.mapping_version;await refresh()}catch{render()}}setStatus(error.message)}
 }
 
 async function openCase(index,trigger) {

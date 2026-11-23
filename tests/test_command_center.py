@@ -132,9 +132,19 @@ def test_followups_append_history_and_aging_uses_confirmed_case_start(signed, ap
 
 def test_mapping_target_and_priority_changes_are_traceable(signed):
     client, _ = signed()
-    assert client.put("/api/admin/mappings",json={"0":{"kl":"Fixture Team B","st":1}}).status_code == 200
+    assert client.put("/api/admin/mappings",json={'version':0,'values':{"0":{"kl":"Fixture Team B","st":1}}}).status_code == 200
     assert "Fixture Team B" in [entry["name"] for entry in client.get("/api/analysis").json()["teams"]]
-    assert client.put("/api/admin/mappings",json={"0":{"kl":"Made up team"}}).status_code == 422
+    assert client.put("/api/admin/mappings",json={'version':0,'values':{"0":{"kl":"Made up team"}}}).status_code == 422
+def test_stale_mapping_snapshot_cannot_overwrite_another_administrator(signed):
+    client,boot=signed()
+    assert client.put('/api/admin/mappings',json={'version':boot['mapping_version'],'values':{'0':{'kl':'Fixture Team B'}}}).status_code==200
+    assert client.put('/api/admin/mappings',json={'version':boot['mapping_version'],'values':{'1':{'st':1}}}).status_code==409
+    current=client.get('/api/bootstrap').json()
+    assert current['overrides']=={'0':{'kl':'Fixture Team B'}}
+    current['overrides']['1']={'st':1}
+    assert client.put('/api/admin/mappings',json={'version':current['mapping_version'],'values':current['overrides']}).status_code==200
+    assert client.get('/api/bootstrap').json()['overrides']=={'0':{'kl':'Fixture Team B'},'1':{'st':1}}
+
     target={"month":"2026-11","region":"","area":-1,"target":10,"evidence":"Fixture approved monthly plan"}
     assert client.post("/api/admin/targets",json=target).status_code == 200
     analysis = client.get("/api/analysis?m0=2&m1=2").json()

@@ -34,6 +34,11 @@ class Login(StrictModel):
     password: str = Field(min_length=1, max_length=256)
 
 
+class MappingChange(StrictModel):
+    version: int = Field(ge=0)
+    values: dict[str, dict]
+
+
 class Scope(StrictModel):
     m0: int = Field(default=0, ge=0)
     m1: int | None = Field(default=None, ge=0)
@@ -224,12 +229,13 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
                         for key in ("tmin", "tmax", "rows", "uniq", "sync", "korlaps", "rt_bad")}
         if session.role != "owner":
             safe["svs"] = [f"Surveyor {index + 1}" for index in range(len(source["svs"]))]
-        overrides = store.latest("mapping").get("all", {})
+        mapping_events=store.history('mapping','all',limit=1)
+        overrides=mapping_events[0]['payload'] if mapping_events else {}
         indexed = {str(index): overrides[name] for index, name in enumerate(source["svs"]) if name in overrides}
         pairs={(row['ab'],row['kel']) for row in session.data['prepared']['rows'] if row['valid_location']}
         pairs.update((row[0],row[1]) for row in [*source['P'],*source['W']] if len(row)>=2 and type(row[0]) is int and type(row[1]) is int and 0<=row[0]<len(source['abs']) and 0<=row[1]<len(source['kels']))
         geography=sorted(pairs)
-        return {"data": safe, "overrides": indexed, "role": session.role, "geography": geography,
+        return {"data": safe, "overrides": indexed, 'mapping_version':mapping_events[0]['id'] if mapping_events else 0, "role": session.role, "geography": geography,
                 "data_owner": os.environ.get("RPD_DATA_OWNER", ""),
                 "csrf": session.csrf, "source": session.data["info"],
                 "capabilities": {"customer_detail": session.role == "owner", "attendance": False,
@@ -291,20 +297,23 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
         return {"event_id": event_id, "ok": True}
 
     @app.put("/api/admin/mappings")
-    def mappings(body: dict, session=Depends(administrator)):
+    def mappings(body: MappingChange, session=Depends(administrator)):
         source = session.data["source"]
         allowed = [*source["meta"].get("korlaps", []), "PENGAWAS", "BELUM TERDAFTAR", "AKUN GENERIK"]
         converted = {}
-        if len(body) > len(source["svs"]):
+        if len(body.values) > len(source["svs"]):
             raise HTTPException(422, "Pemetaan tidak valid.")
-        for index, value in body.items():
+        for index, value in body.values.items():
             if not str(index).isdigit() or not 0 <= int(index) < len(source["svs"]) or not isinstance(value, dict) or set(value) - {"kl", "st"}:
                 raise HTTPException(422, "Pemetaan tidak valid.")
             if ("kl" in value and value["kl"] not in allowed) or ("st" in value and (type(value["st"]) is not int or value["st"] not in (0, 1, 2))):
                 raise HTTPException(422, "Koordinator/status pemetaan tidak valid.")
             converted[source["svs"][int(index)]] = value
-        store.append("mapping", "all", session.actor, converted)
-        return {"ok": True}
+        try:
+            version=store.append_if_current('mapping','all',session.actor,converted,body.version)
+        except ValueError:
+            raise HTTPException(409,'Pemetaan telah diubah administrator lain. Muat versi terbaru lalu ulangi perubahan Anda.')
+        return {"ok": True,'version':version}
 
     @app.post("/api/admin/targets")
     def targets(body: Target, session=Depends(administrator)):
