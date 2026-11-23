@@ -29,7 +29,7 @@ def string(value):
     return struct.pack('<I', len(encoded) // 2) + encoded
 
 
-def binary_fixture(path, date1904=False, missing=None):
+def binary_fixture(path, date1904=False, missing=None, survey_pam='000000123'):
     """Minimal, valid BIFF12 parts sufficient for pyxlsb's real streaming parser."""
     strings = []
     def sheet(columns, values):
@@ -54,7 +54,7 @@ def binary_fixture(path, date1904=False, missing=None):
     survey = {name: '' for name in SURVEY_COLUMNS.values()}
     survey.update({'1. Tanggal Survey': 45658, '2. Regional': 'Fixture Region',
                    '3. Area Bisnis': 'Fixture Area', '4. Nama Surveyor': 'Fixture Surveyor',
-                   '5. PAM ID': '000000123', 'Hasil Canvasing': 'Berminat',
+                   '5. PAM ID': survey_pam, 'Hasil Canvasing': 'Berminat',
                    'Kelurahan': 'FIXTURE KEL', 'Konfirmasi Pemasangan': 'Done'})
     survey['Customer name - NEVER import'] = 'SYNTHETIC SECRET CUSTOMER'
     columns = {**SURVEY_COLUMNS, 'not_selected': 'Customer name - NEVER import'}
@@ -147,6 +147,16 @@ def test_reconciliation_normalizes_ids_and_labels_without_choosing_duplicate_row
     }
     assert profile(survey) == {'rows':6, 'unique_valid_pam':4,
                                'invalid_pam_rows':1, 'duplicate_excess_rows':1}
+
+
+@pytest.mark.parametrize('pam,raw', [('12X3','12X3'), (0,'0'), (None,None)])
+def test_malformed_ids_remain_distinguishable_from_missing_ids(tmp_path, pam, raw):
+    source = tmp_path/'synthetic.xlsb'
+    binary_fixture(source, survey_pam=pam)
+    intake = read_intake(source)
+    assert intake['survey'][0]['pam'] == ''
+    assert intake['survey'][0].get('pam_raw') == raw
+    assert intake['summary']['survey']['invalid_pam_rows'] == 1
 
 
 def test_plaintext_repository_paths_are_refused():

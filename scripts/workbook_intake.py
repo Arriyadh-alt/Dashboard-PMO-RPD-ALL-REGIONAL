@@ -173,7 +173,10 @@ def read_intake(path):
     if not survey or not master:
         raise ValueError('Both survey and master snapshots must contain records')
     for row in survey + master:
-        row['pam'] = normalize_pam(text(row['pam']))
+        raw = text(row['pam'])
+        row['pam'] = normalize_pam(raw)
+        if raw and not row['pam']:
+            row['pam_raw'] = raw
     for row in survey:
         for field in ('survey_date', 'fa_date', 'meter_date'):
             row[field] = excel_date(row[field], date1904)
