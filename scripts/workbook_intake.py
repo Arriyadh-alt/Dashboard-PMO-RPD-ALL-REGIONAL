@@ -106,7 +106,7 @@ def selected_rows(sheet, columns):
         raise ValueError('Missing verified columns: ' + ', '.join(missing))
     lookup = {field: positions[header(name)] for field, name in columns.items()}
     for row in rows:
-        cells = {cell.c: cell.v for cell in row if cell.v is not None}
+        cells = {cell.c: cell.v for cell in row if text(cell.v)}
         if not cells:
             continue
         yield {'source_row': row[0].r + 1, **{field: cells.get(index) for field, index in lookup.items()}}

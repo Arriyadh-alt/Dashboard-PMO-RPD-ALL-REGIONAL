@@ -3,13 +3,14 @@ from datetime import date
 import json
 from pathlib import Path
 import struct
+from types import SimpleNamespace
 import zipfile
 
 import pytest
 from pyxlsb import biff12
 
 from scripts.workbook_intake import (MASTER_COLUMNS, SURVEY_COLUMNS, date_system,
-                                     excel_date, read_intake, write_private)
+                                     excel_date, read_intake, selected_rows, write_private)
 
 
 def record(kind, body=b''):
@@ -122,3 +123,15 @@ def test_plaintext_repository_paths_are_refused():
         write_private(root/'forbidden.json', {})
     with pytest.raises(ValueError, match='outside the repository'):
         read_intake(root/'forbidden.xlsb')
+
+
+def test_empty_cached_formula_rows_are_not_records_but_zero_ids_remain_visible():
+    def cell(row, value):
+        return SimpleNamespace(r=row, c=0, v=value)
+    sheet = SimpleNamespace(rows=lambda sparse: iter([
+        [cell(0, 'PAM_ID')], [cell(1, '')], [cell(2, '  ')],
+        [cell(3, None)], [cell(4, 0)], [cell(5, '000000123')],
+    ]))
+    assert list(selected_rows(sheet, {'pam':'PAM_ID'})) == [
+        {'source_row':5, 'pam':0}, {'source_row':6, 'pam':'000000123'},
+    ]
