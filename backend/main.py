@@ -226,7 +226,9 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
             safe["svs"] = [f"Surveyor {index + 1}" for index in range(len(source["svs"]))]
         overrides = store.latest("mapping").get("all", {})
         indexed = {str(index): overrides[name] for index, name in enumerate(source["svs"]) if name in overrides}
-        geography = sorted({(row["ab"], row["kel"]) for row in session.data["prepared"]["rows"] if row["valid_location"]})
+        pairs={(row['ab'],row['kel']) for row in session.data['prepared']['rows'] if row['valid_location']}
+        pairs.update((row[0],row[1]) for row in [*source['P'],*source['W']] if len(row)>=2 and type(row[0]) is int and type(row[1]) is int and 0<=row[0]<len(source['abs']) and 0<=row[1]<len(source['kels']))
+        geography=sorted(pairs)
         return {"data": safe, "overrides": indexed, "role": session.role, "geography": geography,
                 "data_owner": os.environ.get("RPD_DATA_OWNER", ""),
                 "csrf": session.csrf, "source": session.data["info"],

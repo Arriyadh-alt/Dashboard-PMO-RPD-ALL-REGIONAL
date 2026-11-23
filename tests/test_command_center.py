@@ -1,3 +1,12 @@
+def test_bootstrap_includes_master_only_kelurahan(signed,app):
+    client,_=signed()
+    session=next(iter(app.state.sessions.values.values()))
+    session.data['source']['kels'].append('MASTER ONLY KEL')
+    session.data['source']['P'].append([0,2,25,0,0])
+    boot=client.get('/api/bootstrap').json()
+    assert [0,2] in boot['geography']
+    assert client.get('/api/analysis?kel=2').json()['master']['potential']==25
+
 def test_long_followup_action_can_span_pdf_pages(signed):
     client,_=signed()
     ref=client.post('/api/records/search',json={'outstanding_only':True,'limit':1}).json()['rows'][0]['ref']
