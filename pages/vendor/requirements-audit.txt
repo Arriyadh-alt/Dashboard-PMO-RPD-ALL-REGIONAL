@@ -1,0 +1,5 @@
+# Executed browser report packages, including Pyodide's pure-Python installer.
+# Pillow is deliberately NOT shipped: exports are text tables, never image input.
+micropip==0.11.1
+openpyxl==3.1.5
+et_xmlfile==2.0.0

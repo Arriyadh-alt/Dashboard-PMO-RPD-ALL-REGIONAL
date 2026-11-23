@@ -1,14 +1,45 @@
 # PMO RPD Command Center
 
-An incremental extension of the existing RPD dashboard: the original operational reports remain available, with seven decision-support workspaces, protected server-side access, filter-aware reports and a separate append-only operations ledger.
+Seven decision-support workspaces, original operational reports, unique-customer metrics, filter-aware exports and encrypted customer data. **The selected deployment is the existing free GitHub Pages site; no company server or paid host is required.**
 
-## Deployment is intentionally gated
+## GitHub Pages — selected deployment
 
-**This branch is not a private-service production deployment.** GitHub Pages cannot execute the required backend. The existing root `index.html` is frozen byte-for-byte, so merging this increment does not replace the live dashboard. The new service serves only `web/`, never that legacy root file. Do not cut over until the private host, rotated encrypted input, authorized source validation and operational sign-off are ready. No service, database, domain or paid resource is automatically provisioned by this repository.
+Merging this change intentionally replaces the old root page with the seven-workspace command center. Keep the existing Pages configuration: **main branch, root `/`**. The site uses relative paths, so the repository URL works without a custom domain. `.nojekyll` preserves the local WebAssembly/runtime assets. No API, server, database provisioning, SaaS account or infrastructure deployment is needed.
 
-The new service HTML in `web/` has no customer payload. Serving that directory statically shows a backend-required login shell; it cannot unlock private data. The frozen legacy Pages file retains its previously published ciphertext because the owner explicitly required the live site to remain unchanged. Import that ciphertext unchanged for archival, then rotate into a new private generation before enabling production service access.
+The existing ciphertext/account wrappers are preserved, now in `pages/data.enc.json` instead of inside HTML. Sign-in uses the same PBKDF2-500,000/SHA-256/AES-GCM/gzip contract in Web Crypto. The reviewed Python analytics run locally in a worker through self-hosted Pyodide; counts are not reimplemented with different JavaScript formulas. CSV/XLSX use the same report model; text-only PDF tables use bundled jsPDF/AutoTable with repeated headers, wrapping and pagination. Browser exports do not ship Pillow or any Python image decoder.
 
-## Local service
+**Accepted access model:** encrypted data is publicly downloadable, including from Git history. Anyone with a valid password can decrypt **every customer**, even if their UI presents aggregate-only views. Presentation roles, local history and browser encryption are not server-enforced authorization. There are no HttpOnly sessions, server throttling, shared audit ledger or remote session revocation in this mode. Use a current Chrome/Edge/Firefox/Safari with Web Crypto, gzip streams and WebAssembly. Local edits require Web Locks; unsupported browsers remain report-readable. Initial loading downloads a self-hosted runtime; repeat visits reuse normal browser caches. No decrypted customer records or passwords are persisted.
+
+### Follow-ups and settings are browser-local
+
+Follow-ups, mappings, targets and readiness/rules changes are encrypted in local browser storage under an account-derived key, separate from the daily source key. They survive reloads and daily data replacement **on that account/browser only**. They are **not shared or synchronized with teammates**, and they are not tamper-proof audit evidence. Existing metrics distinguish imported statuses from local manual changes. Aging uses the displayed device date; keep the device clock correct.
+
+Use **Cadangan riwayat lokal terenkripsi** to download an encrypted backup before clearing storage or moving devices. Restore is allowed only into empty local history for the same dashboard, account and password; it never silently replaces current history. Backups retain their original password. Credential changes require a deliberate migration of these backups using the previous credentials; simply changing the login does not re-encrypt history. Another tab changing history causes a reload/re-login warning rather than a lost update. A full/unavailable browser store refuses the write instead of claiming it was saved. Keep encrypted backups separately; browsing in private mode can discard local storage.
+
+### Daily Excel updates
+
+Send the daily Excel file to the Bot. **The first workbook is needed to verify its sheet/column mapping; an authorized existing administrator credential is needed to preserve current logins when encrypting updates.** This repository does not guess an unprovided Excel layout. Confirm whether it is a complete snapshot or incremental input, reconcile unique counts, periods, master stock and duplicates, and create the documented columnar data contract outside the repository. Never append an already-cumulative workbook or label retained master data as freshly updated. Share operational notes through an agreed source workbook if they must reach the whole team; browser-local history is not that shared source.
+
+After that review, the repeatable encrypted publishing path is:
+
+```sh
+# Plaintext contract and new encrypted generation stay outside this checkout.
+# Passwords are prompted privately (or supplied through secure process environment).
+.venv/bin/python -m scripts.update_encrypted pages/data.enc.json /secure/validated-daily.json /secure/daily-NEW.enc.json
+# Verify the printed unique totals against the Excel workbook before publishing.
+.venv/bin/python -m scripts.build_pages /secure/daily-NEW.enc.json
+.venv/bin/python scripts/check_public.py
+```
+
+Open a PR containing the encrypted source, public manifest and rebuilt entrypoint. The user merges it as before; GitHub Pages publishes it. Do not commit the workbook, plaintext contract, credentials, local browser backups or private state databases. The publisher rejects plaintext-shaped JSON and checks the encrypted envelope; an authorized data check remains required. `published_at` means encrypted-file publication, **not** a claimed workbook refresh. The stable `ledger_salt` must be preserved across daily builds so local history remains readable. Old ciphertext/password access cannot be revoked retrospectively; use the rekey helper for an intentional new data key/accounts when rotating credentials.
+
+For code-only changes, run `python -m scripts.build_pages` without a source argument. This rebuilds `pages/engine.zip` and hash-versioned entrypoint without changing the encrypted snapshot, publication time or local-history key salt. Dependencies are already self-hosted and pinned; changing them requires `npm ci --ignore-scripts`, `python -m scripts.vendor_browser_runtime`, the build, audits and review. See `pages/vendor/NOTICE.md` for provenance/licenses.
+
+## Optional private service (not required for Pages)
+
+The previously implemented FastAPI deployment remains available separately. It serves `web/`, which contains no customer payload and requires the private API. The following sections apply **only** if a private host is independently selected later; they do not describe Pages security. No service, database, domain or paid resource is provisioned automatically.
+
+### Local private service
 
 Python 3.12+ is required and used in CI and the container. There is no frontend build step.
 
@@ -24,7 +55,7 @@ Import the existing encrypted envelope or the previous single-file HTML into a d
 # Or: scripts/import_encrypted.py /secure/source.enc.json /secure/rpd/current.enc.json
 ```
 
-The command copies ciphertext unchanged, validates its envelope, archives content-addressed encrypted snapshots, and records an explicit import timestamp plus append-only import history. Only an authorized sign-in can validate the decrypted business contract. Never add a decrypted workbook, real credential, private SQLite database or new encrypted production input to this public repository.
+The command copies ciphertext unchanged, validates its envelope, archives content-addressed encrypted snapshots, and records an explicit import timestamp plus append-only import history. Only an authorized sign-in can validate the decrypted business contract. For this private deployment, keep its separate encrypted input outside the repository/web root. The only approved public encrypted input is the selected Pages asset described above.
 
 Production rejects legacy account envelopes. Prepare a private generation with a new data key and fresh accounts (passwords are entered through hidden prompts, never command-line arguments):
 
@@ -44,7 +75,7 @@ RPD_DATA_PATH=/secure/rpd/current.enc.json RPD_STATE_DIR=/secure/rpd/state \
 
 Open the loopback URL in the same browser machine. Use an existing authorized account. `RPD_DEV=1` is the explicit exception allowing non-Secure cookies for local HTTP; never enable it on a public host. The application does not load `.env` automatically; provide environment variables through your service manager or container configuration.
 
-## Production operation
+### Private-service production operation
 
 1. Choose a private host and persistent, encrypted-at-rest volume; put encrypted input, import manifests, snapshot archives and the SQLite ledger outside any web root. Set volume ownership to the service user (container UID 10001 if using the supplied Dockerfile).
 2. Set `RPD_PUBLIC_ORIGIN` to the exact HTTPS origin, `RPD_DATA_PATH`, `RPD_STATE_DIR`, and optionally `RPD_DATA_OWNER`. Serve this application and its API under that same origin, at the origin root.
@@ -56,7 +87,7 @@ Open the loopback URL in the same browser machine. Use an existing authorized ac
 
 No production data is included with the container. `/health` reports configuration readiness only, not certification of business data. Authentication uses the original PBKDF2/AES-GCM account envelopes on the server; passwords are not stored by this service. A future organizational identity-provider migration remains possible without changing the reporting interface.
 
-### Server-enforced permissions
+#### Server-enforced permissions (private service only)
 
 | Capability | Aggregate viewer (existing `g`) | Administrator (existing `a`) |
 |---|---|---|
@@ -81,7 +112,14 @@ Missing target calendars, verified case starts/pauses, attendance, state snapsho
 .venv/bin/python scripts/check_public.py
 node --check web/app.js
 node --check web/command-center.js
+node --check pages/browser.js
+node --input-type=module --check < pages/analysis-worker.js
+node --check pages/pdf.js
 node --test tests/preset_scope.test.cjs
+npm ci --ignore-scripts
+node tests/browser_engine.test.cjs
+npm audit --audit-level=low
+.venv/bin/python -m pip_audit -r pages/vendor/requirements-audit.txt --no-deps --disable-pip
 .venv/bin/python -m pip_audit --progress-spinner off
 ```
 

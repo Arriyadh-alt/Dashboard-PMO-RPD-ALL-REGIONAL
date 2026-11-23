@@ -1,0 +1,69 @@
+{
+  "version": "314.0.8",
+  "files": {
+    "pyodide/pyodide.mjs": {
+      "url": "https://cdn.jsdelivr.net/pyodide/v314.0.8/full/pyodide.mjs",
+      "sha256": "1bb8cc14f9405aaa7cd4e00c12edd0a8539de9cc026618d6ee5a9663f367dc70",
+      "bytes": 17758
+    },
+    "pyodide/pyodide.asm.mjs": {
+      "url": "https://cdn.jsdelivr.net/pyodide/v314.0.8/full/pyodide.asm.mjs",
+      "sha256": "22514b8be6980e28a02c8b1d6387ce8dfe666fc4edf8d547cff5dce29ff4d972",
+      "bytes": 1250259
+    },
+    "pyodide/pyodide.asm.wasm": {
+      "url": "https://cdn.jsdelivr.net/pyodide/v314.0.8/full/pyodide.asm.wasm",
+      "sha256": "e14d49ceca9b4a0e274ea918f3a898de2d3880b6e5573a6cfe1a2267ecc70329",
+      "bytes": 9597892
+    },
+    "pyodide/python_stdlib.zip": {
+      "url": "https://cdn.jsdelivr.net/pyodide/v314.0.8/full/python_stdlib.zip",
+      "sha256": "2bd3394a145bfbbe5bbc9d9d6ab9136abbb986c6fef6c142b3a2962227aa5c28",
+      "bytes": 2545550
+    },
+    "pyodide/pyodide-lock.json": {
+      "url": "https://cdn.jsdelivr.net/pyodide/v314.0.8/full/pyodide-lock.json",
+      "sha256": "5dc2fc119108bc148c7457dc86e7675b5c87e1cafd420b9c34c1eaef7b36c010",
+      "bytes": 119077
+    },
+    "pyodide/micropip-0.11.1-py3-none-any.whl": {
+      "url": "https://cdn.jsdelivr.net/pyodide/v314.0.8/full/micropip-0.11.1-py3-none-any.whl",
+      "sha256": "e2d52886594fd4cd0d0847110a1c34ae0134d3a970eb4496d3b5eb31ee2d8af6",
+      "bytes": 115486
+    },
+    "wheels/openpyxl-3.1.5-py2.py3-none-any.whl": {
+      "url": "https://files.pythonhosted.org/packages/c0/da/977ded879c29cbd04de313843e76868e6e13408a94ed6b987245dc7c8506/openpyxl-3.1.5-py2.py3-none-any.whl",
+      "sha256": "5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2",
+      "bytes": 250910
+    },
+    "wheels/et_xmlfile-2.0.0-py3-none-any.whl": {
+      "url": "https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl",
+      "sha256": "7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa",
+      "bytes": 18059
+    },
+    "jspdf-4.2.1.min.js": {
+      "url": "https://www.npmjs.com/package/jspdf/v/4.2.1",
+      "sha256": "e6551fcdc32f09d6853b2c5126d18d01d9447e0da618a41a11ebeee0f6c20d54",
+      "bytes": 420165
+    },
+    "jspdf-autotable-5.0.9.min.js": {
+      "url": "https://www.npmjs.com/package/jspdf-autotable/v/5.0.9",
+      "sha256": "83dd8e5ae29436bd3d3ef4f4a915125b3951264994c25de0359d3fbd105abe15",
+      "bytes": 32791
+    }
+  },
+  "wheels": [
+    "openpyxl-3.1.5-py2.py3-none-any.whl",
+    "et_xmlfile-2.0.0-py3-none-any.whl"
+  ],
+  "javascript": [
+    {
+      "path": "jspdf-4.2.1.min.js",
+      "version": "4.2.1"
+    },
+    {
+      "path": "jspdf-autotable-5.0.9.min.js",
+      "version": "5.0.9"
+    }
+  ]
+}

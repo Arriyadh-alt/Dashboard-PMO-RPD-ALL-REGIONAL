@@ -1,0 +1,6 @@
+{
+  "name": "rpd-command-center-checks",
+  "private": true,
+  "scripts": {"test:browser-engine": "node tests/browser_engine.test.cjs"},
+  "devDependencies": {"jspdf": "4.2.1", "jspdf-autotable": "5.0.9"}
+}
