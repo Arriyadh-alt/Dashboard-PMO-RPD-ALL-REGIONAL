@@ -117,6 +117,11 @@ def test_actual_workbook_date_system_is_respected(tmp_path):
         excel_date('ambiguous date')
 
 
+def test_late_timestamps_cannot_round_into_the_next_calendar_day():
+    assert excel_date(45658 + 86399.9 / 86400) == '2025-01-01'
+    assert excel_date(45658 + 86399.999 / 86400, date1904=True) == excel_date(45658, date1904=True)
+
+
 def test_plaintext_repository_paths_are_refused():
     root = Path(__file__).resolve().parents[1]
     with pytest.raises(ValueError, match='outside the repository'):

@@ -81,7 +81,9 @@ def excel_date(value, date1904=False):
             raise ValueError('Invalid Excel date serial')
         if date1904:
             return (date(1904, 1, 1) + timedelta(days=int(value))).isoformat()
-        return convert_date(value).date().isoformat()
+        # The library rounds fractional seconds, which can advance 23:59:59.9
+        # into tomorrow. This adapter imports calendar dates, not timestamps.
+        return convert_date(int(value)).date().isoformat()
     try:
         return date.fromisoformat(text(value)).isoformat()
     except ValueError as error:
