@@ -153,7 +153,9 @@ class BrowserAPI:
             payload['updated_at']=now()
             return dict(ok=True,event_id=store.append('followup',ref,self.actor,payload))
         if route=='/api/admin/mappings':
-            values=body.get('values',{});converted={};allowed=[*source['meta'].get('korlaps',[]),'PENGAWAS','BELUM TERDAFTAR','AKUN GENERIK']
+            values=body.get('values',{});active=set(source['svs'])
+            converted={name:value for name,value in store.latest('mapping').get('all',{}).items() if name not in active}
+            allowed=[*source['meta'].get('korlaps',[]),'PENGAWAS','BELUM TERDAFTAR','AKUN GENERIK']
             if not isinstance(values,dict) or len(values)>len(source['svs']): raise ValueError('Invalid mapping')
             for index,value in values.items():
                 index=integer(index,0,len(source['svs'])-1)

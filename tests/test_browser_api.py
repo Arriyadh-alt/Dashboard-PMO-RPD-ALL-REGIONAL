@@ -55,3 +55,17 @@ def test_locked_history_reports_disclose_source_only_calculations():
     app=browser()
     app.info['history_locked']=True
     assert any('Source-only' in line for line in app.request('/api/reports/executive.pdf')['pdf_model']['metadata'])
+
+
+def test_mapping_survives_absent_surveyor_and_current_roster_edits():
+    app=browser()
+    app.request('/api/admin/mappings','PUT',{'version':0,'values':{'1':{'st':1}}})
+    daily=fixture_data()
+    daily['svs'][1]='FIXTURE TEMPORARY SURVEYOR C'
+    absent=BrowserAPI(daily,'owner','actor',app.info,app.store.events)
+    absent.request('/api/admin/mappings','PUT',{'version':1,'values':{'0':{'kl':'Fixture Team B'}}})
+    assert absent.store.latest('mapping')['all']['FIXTURE SURVEYOR B']=={'st':1}
+    # Resetting the current editor clears current-roster edits, not archived names.
+    absent.request('/api/admin/mappings','PUT',{'version':2,'values':{}})
+    returned=BrowserAPI(fixture_data(),'owner','actor',app.info,absent.store.events)
+    assert returned.bootstrap()['overrides']=={'1':{'st':1}}
