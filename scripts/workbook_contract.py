@@ -152,8 +152,16 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False):
     survey, master = index_records(intake['survey']), index_records(intake['master'])
     if not old_set <= survey.keys():
         raise ValueError('Snapshot omits existing survey IDs; review deletions or incremental input')
+    # A matched master customer may have a blank FINAL FLAG. Other source
+    # fields and the derived membership classification still prove membership.
+    master_classes = {'Non potensi (master)', 'Potensi tersisa',
+                      'Potensi, sudah berminat (dikeluarkan)',
+                      'Potensi, tapi Update: tidak ada bangunan atau PTD'}
     known_master = {pam for j, pam in enumerate(old_ids)
-                    if baseline['dic']['mf'][baseline['rec']['mf'][j]]}
+                    if baseline['dic']['mf'][baseline['rec']['mf'][j]]
+                    or baseline['dic']['sc'][baseline['rec']['sc'][j]]
+                    or baseline['rec']['tg'][j]
+                    or baseline['dic']['pr'][baseline['rec']['pr'][j]] in master_classes}
     if not known_master <= master.keys():
         raise ValueError('Snapshot omits known master IDs; review master coverage')
     data = deepcopy(baseline)

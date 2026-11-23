@@ -117,6 +117,21 @@ def test_bootstrap_cannot_learn_aliases_from_a_changed_snapshot():
         bootstrap_aliases(baseline, intake)
 
 
+@pytest.mark.parametrize('evidence', ['pr', 'sc', 'tg'])
+def test_blank_final_flag_cannot_hide_omitted_matched_master_customer(evidence):
+    baseline, intake = matching_snapshot()
+    aliases = bootstrap_aliases(baseline, intake)
+    # A previously matched master row can have no FINAL FLAG, customer status
+    # or debt. Derived pr membership alone must still prevent its silent loss.
+    baseline['rec']['mf'][1] = baseline['rec']['sc'][1] = baseline['rec']['tg'][1] = 0
+    baseline['rec']['pr'][1] = baseline['dic']['pr'].index('Di luar Master Data')
+    baseline['rec'][evidence][1] = {'pr': baseline['dic']['pr'].index('Non potensi (master)'),
+                                    'sc': 1, 'tg': 200}[evidence]
+    intake['master'].pop(1)
+    with pytest.raises(ValueError, match='omits known master'):
+        convert(baseline, intake, aliases, full_snapshot=True)
+
+
 @pytest.mark.parametrize('change,match', [
     (lambda i: i['survey'].pop(), 'omits existing survey'),
     (lambda i: i['master'].pop(0), 'omits known master'),
