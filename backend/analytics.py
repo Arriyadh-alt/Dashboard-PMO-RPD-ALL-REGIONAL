@@ -139,6 +139,10 @@ def scoped_rows(data, prepared, filters, overrides, date_field="date"):
     statuses=filters.get('statuses',[])
     base_filters={**filters,'statuses':[]} if statuses else filters
     rows=[row for row in prepared['rows'] if matches(data,prepared,row,base_filters,overrides,date_field,bounds=bounds)]
+    return status_scope(rows,statuses)
+
+
+def status_scope(rows,statuses):
     if not statuses:
         return rows
     states=defaultdict(set)
@@ -287,13 +291,14 @@ def build_analysis(data, prepared, filters, store, role):
         teams.append(entry)
     trends = defaultdict(list)
     install_events = defaultdict(set)
-    for row in rows:
+    trend_rows=scoped_rows(data,prepared,{**filters,'statuses':[]},overrides)
+    for row in trend_rows:
         trends[row["date"].strftime("%Y-%m")].append(row)
     # Installation events use installation date, not survey month or today's status history.
     for row in scoped_rows(data, prepared, filters, overrides, "install_date"):
         if row["installed"] and row["pam"] not in prepared["ambiguous"]:
             install_events[row["install_date"].strftime("%Y-%m")].add(row["pam"])
-    timeline = [{"month": key, **cohort(trends.get(key, []), prepared["ambiguous"]),
+    timeline = [{"month": key, **cohort(status_scope(trends.get(key, []),filters.get('statuses',[])), prepared["ambiguous"]),
                  "installation_events": len(install_events.get(key, set()))} for key in sorted(set(trends) | set(install_events))]
     trend_series = {"monthly": timeline}
     for granularity in ("daily", "weekly"):
@@ -303,12 +308,12 @@ def build_analysis(data, prepared, filters, store, role):
                 return value.isoformat()
             year, week, _ = value.isocalendar()
             return f"{year}-W{week:02d}"
-        for row in rows:
+        for row in trend_rows:
             grouped[bucket(row["date"])].append(row)
         for row in scoped_rows(data, prepared, filters, overrides, "install_date"):
             if row["installed"] and row["pam"] not in prepared["ambiguous"]:
                 installed_events[bucket(row["install_date"])].add(row["pam"])
-        trend_series[granularity] = [{"month": key, **cohort(grouped.get(key, []), prepared["ambiguous"]),
+        trend_series[granularity] = [{"month": key, **cohort(status_scope(grouped.get(key, []),filters.get('statuses',[])), prepared["ambiguous"]),
                                       "installation_events": len(installed_events.get(key, set()))}
                                      for key in sorted(set(grouped) | set(installed_events))]
     pending = [row for row in rows if row["interest"] and not row["installed"] and not row["cancelled"]]
