@@ -41,8 +41,8 @@ function vRingkasan(){
  ].map(x=>`<div class="cd"><div class="card-top"><div class="cl">${x[0]}</div><span class="metric-icon">${icon(x[3])}</span></div><div class="cv">${N(x[1])}</div><div class="mu sm2">${x[2]}</div></div>`).join('')+`</div>`;
  h+=`<div class="two breakdowns"><section class="panel"><h2>Hasil canvassing <span class="panel-sub">Komposisi hasil survei</span></h2>${seg([['Berminat',b,'b1'],['Tidak berminat',tb,'b2'],['Belum diketahui',bd,'b3'],['PTD',ptd,'b4'],['Tidak ada bangunan',nb,'b5']],c)}</section>
  <section class="panel"><h2>Status pemasangan <span class="panel-sub">Pelanggan berminat</span></h2>${seg([['Terpasang',tp,'b1'],['Assign FA',af,'b2'],['Outstanding',os,'b3'],['Cancel',cn,'b4']],b)}</section></div>`;
- const ms=[...new Set(A.map(r=>r[0]))].sort((a,b)=>a-b),gm=grp(A,r=>r[0],2,10),ge=grp(D.E.filter(ok),r=>r[0],2,2),lab=ms.map(i=>ML(i,1));
- h+=`<h2>Tren bulanan <span class="mu sm">Perkembangan dari waktu ke waktu</span></h2><div class="two trend-grid">`+bars('Tercanvassing · bulan survei',ms.map(i=>gm.get(i)[0]),lab)+bars('Berminat · bulan survei',ms.map(i=>gm.get(i)[1]),lab)+bars('Meter terpasang · bulan pemasangan',ms.map(i=>(ge.get(i)||[0,0])[1]),lab)+`</div>`;
+ const E=D.E.filter(ok),ms=[...new Set([...A,...E].map(r=>r[0]))].sort((a,b)=>a-b),gm=grp(A,r=>r[0],2,10),ge=grp(E,r=>r[0],2,2),lab=ms.map(i=>ML(i,1));
+ h+=`<h2>Tren bulanan <span class="mu sm">Perkembangan dari waktu ke waktu</span></h2><div class="two trend-grid">`+bars('Tercanvassing · bulan survei',ms.map(i=>(gm.get(i)||[0])[0]),lab)+bars('Berminat · bulan survei',ms.map(i=>(gm.get(i)||[0,0])[1]),lab)+bars('Meter terpasang · bulan pemasangan',ms.map(i=>(ge.get(i)||[0,0])[1]),lab)+`</div>`;
  const g=grp(A,r=>D.reg[r[1]],2,10);
  h+=`<h2>Kinerja per regional <span class="mu sm">Klik baris untuk memfilter laporan</span></h2>`+tbl('reg',[{h:'Regional',t:'s'},...CA],[...g].map(([k,t])=>({k:'reg:'+k,on:S.reg==k,v:[esc(k),...rowA(t)]})),['Total',...rowA(t)],{si:1});
  const ga=grp(A,r=>r[1],2,10);

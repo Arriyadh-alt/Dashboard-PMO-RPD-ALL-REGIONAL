@@ -55,3 +55,26 @@ test('removed geography and unverifiable older presets are rejected',()=>{
   assert.equal(context.resolvePreset(saved),null);
   assert.equal(context.resolvePreset({scope:context.S}),null);
 });
+
+function legacyOverview(filters={}){
+  const context={input:{months:['2026-10','2026-11'],abs:['A','B'],reg:['West','East'],
+    A:[[0,0,1,1,0,0,0,0,0,1,0,0],[0,1,1,0,1,0,0,0,0,0,0,0]],
+    E:[[1,0,0,5]],P:[],meta:{uniq:2}},filters};
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync('web/app.js','utf8'),context);
+  return vm.runInContext('D=input;Object.assign(S,{m0:0,m1:1},filters);vRingkasan()',context);
+}
+
+test('legacy meter trend retains an event-only month, including when selected alone',()=>{
+  for(const filters of [{},{m0:1,m1:1}]){
+    const html=legacyOverview(filters);
+    assert.match(html,/<title>Nov 26: 5<\/title>/);
+    assert.match(html,/<title>Nov 26: 0<\/title>/);
+  }
+});
+
+test('legacy event-only month still respects regional and area filters',()=>{
+  for(const filters of [{reg:'East'},{ab:1}]){
+    assert.doesNotMatch(legacyOverview(filters),/Nov 26/);
+  }
+});
