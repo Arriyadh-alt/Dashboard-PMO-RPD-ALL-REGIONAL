@@ -78,6 +78,8 @@ function fill() {
   const kelIds=[...new Set(geography.filter(([area])=>(!S.reg||D.reg[area]===S.reg)&&(S.ab<0||area===S.ab)).map(([,kel])=>kel))];
   $('#fk').innerHTML=option(-1,'Semua kelurahan',S.kel<0)+kelIds.filter(i=>!search||D.kels[i].toLowerCase().includes(search)||i===S.kel).sort((a,b)=>D.kels[a].localeCompare(D.kels[b],'id')).map(i=>option(i,D.kels[i],i===S.kel)).join('');
   const coordinators=[...new Set(D.S.filter(row=>(!S.reg||D.reg[row[1]]===S.reg)&&(S.ab<0||row[1]===S.ab)).map(eKl))].sort();
+  if(S.coordinator&&!coordinators.includes(S.coordinator))S.coordinator='';
+  if(S.kel>=0&&!kelIds.includes(S.kel))S.kel=-1;
   $('#fco').innerHTML=option('','Semua koordinator / tim',!S.coordinator)+coordinators.map(name=>option(name,LB[name]||name,name===S.coordinator)).join('');
   $('#fstatus').innerHTML=D.dic.kf.filter(Boolean).map(status=>option(status,status,S.statuses.includes(status))).join('');
   $('#fstart').value=S.start;$('#fend').value=S.end;
@@ -299,7 +301,7 @@ document.addEventListener('click',async event=>{
   if(target.id==='ovx'){const previous=OV;OV={};await svOv(previous);return}
   if(target.id==='all'){S.all=1;render();return}
   if(target.matches('th[data-i]')){const id=target.closest('table').dataset.id,index=+target.dataset.i,state=S.sort[id]||{i:T[id].si,d:-1};S.sort[id]={i:index,d:state.i===index?-state.d:(T[id].cols[index].t==='s'?1:-1)};render();return}
-  if(target.matches('tr[data-k]')){const [kind,...rest]=target.dataset.k.split(':'),value=rest.join(':');if(kind==='reg'){S.reg=S.reg===value?'':value;S.ab=S.kel=-1;refresh()}else if(kind==='ab'){S.ab=S.ab===+value?-1:+value;if(S.ab>=0)S.reg=D.reg[S.ab];S.kel=-1;refresh()}else{if(kind==='kel')S.openK=S.openK===+value?null:+value;else S.open=S.open===value?'':value;render()}return}
+  if(target.matches('tr[data-k]')){const [kind,...rest]=target.dataset.k.split(':'),value=rest.join(':');if(kind==='reg'){S.reg=S.reg===value?'':value;S.ab=S.kel=-1;S.coordinator='';refresh()}else if(kind==='ab'){S.ab=S.ab===+value?-1:+value;if(S.ab>=0)S.reg=D.reg[S.ab];S.kel=-1;S.coordinator='';refresh()}else{if(kind==='kel')S.openK=S.openK===+value?null:+value;else S.open=S.open===value?'':value;render()}return}
 });
 
 function setTheme(theme){document.documentElement.dataset.theme=theme;$('#thm').setAttribute('aria-label',theme==='dark'?'Aktifkan tema terang':'Aktifkan tema gelap');$('#thm').setAttribute('aria-pressed',theme==='dark')}
