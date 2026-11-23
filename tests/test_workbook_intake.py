@@ -10,7 +10,8 @@ import pytest
 from pyxlsb import biff12
 
 from scripts.workbook_intake import (MASTER_COLUMNS, SURVEY_COLUMNS, date_system,
-                                     excel_date, read_intake, selected_rows, write_private)
+                                     excel_date, profile, read_intake, reconcile,
+                                     selected_rows, write_private)
 
 
 def record(kind, body=b''):
@@ -85,7 +86,7 @@ def test_real_binary_reader_uses_headers_and_excludes_unneeded_personal_fields(t
     assert result['summary']['survey'] == dict(rows=1, unique_valid_pam=1,
                                                invalid_pam_rows=0, duplicate_excess_rows=0)
     assert result['summary']['dates']['survey_date'] == {'min':'2025-01-01', 'max':'2025-01-01'}
-    assert result['survey'][0]['pam'] == '000000123'
+    assert result['survey'][0]['pam'] == '123'
     assert result['survey'][0]['source_row'] == 2
     assert result['master'][0]['arrears'] == 1000
     assert 'SYNTHETIC SECRET CUSTOMER' not in json.dumps(result)
@@ -130,6 +131,22 @@ def test_omitted_optional_workbook_properties_default_to_1900(tmp_path):
     intake = read_intake(source)
     assert intake['date_system'] == '1900'
     assert intake['survey'][0]['survey_date'] == '2025-01-01'
+
+
+def test_reconciliation_normalizes_ids_and_labels_without_choosing_duplicate_rows():
+    def row(pam, region='Barat', area='Sunter', kel='A'):
+        return dict(pam=pam, region=region, area=area, kelurahan=kel)
+    survey = [row(123), row('000000124'), row(125), row('000000125'),
+              row('invalid'), row(127)]
+    master = [row('000000123', ' Regional  BARAT ', ' AB  Sunter '),
+              row(124, 'Regional Pusat', 'AB Jatibaru', 'B'), row(125), row(126)]
+    assert reconcile(survey, master) == {
+        'matched_valid_ids':3, 'survey_ids_not_in_master':1, 'master_ids_not_in_survey':1,
+        'geography_compared_unique_ids':2, 'geography_withheld_duplicate_ids':1,
+        'normalized_geography_mismatches':{'region':1, 'area':1, 'kelurahan':1},
+    }
+    assert profile(survey) == {'rows':6, 'unique_valid_pam':4,
+                               'invalid_pam_rows':1, 'duplicate_excess_rows':1}
 
 
 def test_plaintext_repository_paths_are_refused():

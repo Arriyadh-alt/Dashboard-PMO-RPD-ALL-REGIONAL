@@ -126,6 +126,34 @@ def profile(records):
             'duplicate_excess_rows': sum(count - 1 for count in ids.values())}
 
 
+def reconcile(survey, master):
+    """Compare valid IDs; never silently choose one of several duplicate rows."""
+    def index(records):
+        counts, rows = Counter(), {}
+        for row in records:
+            pam = normalize_pam(text(row['pam']))
+            if pam:
+                counts[pam] += 1
+                rows[pam] = row
+        return set(counts), {pam: row for pam, row in rows.items() if counts[pam] == 1}
+    survey_ids, survey_unique = index(survey)
+    master_ids, master_unique = index(master)
+    matched = survey_ids & master_ids
+    compared = survey_unique.keys() & master_unique.keys()
+    mismatches = {}
+    for field, prefix in (('region', 'regional '), ('area', 'ab '), ('kelurahan', '')):
+        mismatches[field] = sum(
+            header(survey_unique[pam][field]).removeprefix(prefix) !=
+            header(master_unique[pam][field]).removeprefix(prefix)
+            for pam in compared)
+    return {'matched_valid_ids': len(matched),
+            'survey_ids_not_in_master': len(survey_ids - master_ids),
+            'master_ids_not_in_survey': len(master_ids - survey_ids),
+            'geography_compared_unique_ids': len(compared),
+            'geography_withheld_duplicate_ids': len(matched - compared),
+            'normalized_geography_mismatches': mismatches}
+
+
 def read_intake(path):
     path = Path(path).resolve()
     if path == ROOT or ROOT in path.parents:
@@ -144,6 +172,8 @@ def read_intake(path):
             master = list(selected_rows(sheet, MASTER_COLUMNS))
     if not survey or not master:
         raise ValueError('Both survey and master snapshots must contain records')
+    for row in survey + master:
+        row['pam'] = normalize_pam(text(row['pam']))
     for row in survey:
         for field in ('survey_date', 'fa_date', 'meter_date'):
             row[field] = excel_date(row[field], date1904)
@@ -155,7 +185,8 @@ def read_intake(path):
                          for key, values in dates.items()},
                'interest_counts': dict(Counter(text(row['result']) for row in survey)),
                'installation_counts': dict(Counter(text(row['installation_status']) for row in survey)),
-               'master_flag_counts': dict(Counter(text(row['master_flag']) for row in master))}
+               'master_flag_counts': dict(Counter(text(row['master_flag']) for row in master)),
+               'cross_sheet': reconcile(survey, master)}
     return {'layout_version': 1, 'workbook_sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
             'sheets': {'survey': updates[0], 'master': masters[0]},
             'date_system': '1904' if date1904 else '1900',
