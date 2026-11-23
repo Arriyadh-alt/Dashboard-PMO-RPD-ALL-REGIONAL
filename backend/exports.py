@@ -87,6 +87,8 @@ def report_content(kind, extension, analysis, data, prepared, filters, store, ro
                 "Filters: " + filter_labels(data,filters), "Last successful import: " + (source.get("imported_at") or "Insufficient Data"),
                 "Source loaded at: " + source["loaded_at"], "Source fingerprint: " + source["fingerprint"],
                 DEFINITION, scope["history"], "Role: " + role]
+    if source.get('history_locked'):
+        metadata.append('Local operational history unavailable: previous password required. Source-only calculations; saved history has not been applied.')
     return headers, rows, metadata
 
 

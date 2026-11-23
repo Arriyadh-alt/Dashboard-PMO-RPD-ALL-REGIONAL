@@ -43,6 +43,7 @@ function init(payload) {
   Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,coordinator:'',statuses:[],start:'',end:'',tab:'ringkasan',q:'',open:'',all:0});
   $('#lg').hidden=true;$('#app').hidden=false;$('#out').hidden=false;$('#role').textContent=ROLE==='owner'?'Administrator':'Aggregate viewer';
   $('#sub').textContent=(BOOT.data_owner?BOOT.data_owner+' · ':'')+'Kohort survei '+fd(D.meta.tmin)+' – '+fd(D.meta.tmax)+' · Metrik unik dan stok master dibedakan.';
+  if(SOURCE.history_locked)$('#sub').textContent+=' · Riwayat lokal terkunci; hanya data sumber diterapkan.';
   $('#lp').value='';$('#li').value='';fill();refresh();$('#main').focus({preventScroll:true});
   window.RPDStatic?.ready(ROLE,BOOT);
 }

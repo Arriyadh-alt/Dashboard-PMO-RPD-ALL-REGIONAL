@@ -20,6 +20,8 @@ Legacy `rpd_ov` mappings are retained on Pages upgrades. After owner sign-in, re
 
 ### Daily Excel updates
 
+After a same-account password change, unreadable local history is retained: reports stay available with a source-only warning, edits are blocked, and the backup button downloads the original ciphertext. Use the previous-password recovery control to validate the old history and re-encrypt it under the current login password. A wrong previous password never overwrites the saved copy.
+
 Send the daily Excel file to the Bot. **The first workbook is needed to verify its sheet/column mapping; an authorized existing administrator credential is needed to preserve current logins when encrypting updates.** This repository does not guess an unprovided Excel layout. Confirm whether it is a complete snapshot or incremental input, reconcile unique counts, periods, master stock and duplicates, and create the documented columnar data contract outside the repository. Never append an already-cumulative workbook or label retained master data as freshly updated. Share operational notes through an agreed source workbook if they must reach the whole team; browser-local history is not that shared source.
 
 After that review, the repeatable encrypted publishing path is:

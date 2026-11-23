@@ -49,3 +49,9 @@ def test_browser_validation_and_presentation_role_are_not_misrepresented():
     with pytest.raises(ValueError): browser().request('/api/admin/rules')
     with pytest.raises(ValueError): LocalEvents([{'id':1,'payload':{}}])
     with pytest.raises(ValueError): validate(fixture_data())
+
+
+def test_locked_history_reports_disclose_source_only_calculations():
+    app=browser()
+    app.info['history_locked']=True
+    assert any('Source-only' in line for line in app.request('/api/reports/executive.pdf')['pdf_model']['metadata'])
