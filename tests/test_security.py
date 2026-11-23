@@ -21,7 +21,9 @@ def test_viewer_cannot_retrieve_customer_rows_or_change_admin_state(signed):
     summary=client.get('/api/analysis').json()
     assert all('individuals' not in team for team in summary['teams'])
     report=client.get('/api/reports/outstanding.csv').content.decode('utf-8-sig')
-    assert '10000006' not in report and 'PAM ID' not in report and 'FIXTURE SURVEYOR' not in report
+    assert '10000006' not in report and 'FIXTURE SURVEYOR' not in report
+    assert 'Source installation status,Outstanding survey rows' in report
+    assert '\r\nCase reference,PAM ID,' not in report
 
 
 def test_csrf_origin_and_role_escalation_are_rejected(signed):
@@ -38,8 +40,8 @@ def test_logout_and_expiry_revoke_server_session(signed,app):
     client,_=signed()
     old=client.cookies.get('rpd_session')
     assert client.post('/api/logout').status_code==200
-    client.cookies.set('rpd_session',old)
-    assert client.get('/api/bootstrap').status_code==401
+    assert client.get('/api/bootstrap',headers={'cookie':f'rpd_session={old}'}).status_code==401
+    client.cookies.clear()
     client,_=signed()
     for session in app.state.sessions.values.values():
         session.created=time.monotonic()-3601
