@@ -198,8 +198,19 @@ def previous_period(data, prepared, filters):
         previous_start = date(serial // 12, serial % 12 + 1, 1)
         previous_end = start - timedelta(days=1)
     known_dates = [row["date"] for row in prepared["rows"] if row['valid']]
-    first_month=date.fromisoformat(data['months'][0]+'-01')
-    if not known_dates or previous_start < max(min(known_dates),first_month) or previous_end > max(known_dates):
+    if not known_dates:
+        return None
+    coverage_start,coverage_end=min(known_dates),max(known_dates)
+    def declared_date(name):
+        value=data['meta'].get(name)
+        try:
+            return date.fromisoformat(str(value))
+        except ValueError:
+            return source_date(value)
+    declared_start,declared_end=declared_date('tmin'),declared_date('tmax')
+    if declared_start: coverage_start=max(coverage_start,declared_start)
+    if declared_end: coverage_end=min(coverage_end,declared_end)
+    if previous_start < coverage_start or previous_end > coverage_end:
         return None
     return {**filters, "start": previous_start.isoformat(), "end": previous_end.isoformat()}
 
