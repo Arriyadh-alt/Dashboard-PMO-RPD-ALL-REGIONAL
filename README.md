@@ -43,6 +43,8 @@ For code-only changes, run `python -m scripts.build_pages` without a source argu
 
 ## Optional private service (not required for Pages)
 
+Pages PDF uses built-in WinAnsi fonts. Unsupported characters (for example arrows/emoji in notes) are printed as explicit `\u{HEX}` notation with a disclosure, rather than corrupting surrounding words. Choose CSV/XLSX for verbatim Unicode text. Source records and stored notes are never rewritten by PDF formatting.
+
 The previously implemented FastAPI deployment remains available separately. It serves `web/`, which contains no customer payload and requires the private API. The following sections apply **only** if a private host is independently selected later; they do not describe Pages security. No service, database, domain or paid resource is provisioned automatically.
 
 ### Local private service

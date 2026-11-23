@@ -30,6 +30,12 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),asse
  browser.window=browser;vm.runInContext(fs.readFileSync('pages/pdf.js','utf8'),browser);
  assert.equal(typeof browser.autoTable,'function');
  assert.equal(Buffer.from(browser.RPDPDF.renderPDF(model,browser.jspdf.jsPDF,browser.autoTable)).subarray(0,4).toString(),'%PDF');
+ const unicode={metadata:['Synthetic Unicode report'],headers:['Action'],rows:[['Survey → pemasangan 😀 END']]};
+ const pdf=Buffer.from(browser.RPDPDF.renderPDF(unicode,browser.jspdf.jsPDF,browser.autoTable)).toString('latin1');
+ const streams=Array.from(pdf.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g),match=>{try{return require('node:zlib').inflateSync(Buffer.from(match[1],'latin1')).toString('latin1')}catch{return match[1]}}).join('\n');
+ assert.ok(streams.includes('Survey \\\\u{2192} pemasangan \\\\u{1F600} END'));
+ assert.ok(streams.includes('CSV/XLSX'));
+ assert.equal(unicode.rows[0][0],'Survey → pemasangan 😀 END');
  assert.equal(py.runPython("'PIL' not in sys.modules"),true);
  console.log('Real local WASM: unique9/6/3; Barat6/4/2; CSV/XLSX/PDF passed without Python image packages.');
 })().catch(error=>{console.error(error.message);process.exitCode=1});
