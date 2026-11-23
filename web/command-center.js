@@ -44,7 +44,7 @@ function init(payload) {
   $('#lg').hidden=true;$('#app').hidden=false;$('#out').hidden=false;$('#role').textContent=ROLE==='owner'?'Administrator':'Aggregate viewer';
   $('#sub').textContent=(BOOT.data_owner?BOOT.data_owner+' · ':'')+'Kohort survei '+fd(D.meta.tmin)+' – '+fd(D.meta.tmax)+' · Metrik unik dan stok master dibedakan.';
   $('#lp').value='';$('#li').value='';fill();refresh();$('#main').focus({preventScroll:true});
-  window.RPDStatic?.ready(ROLE);
+  window.RPDStatic?.ready(ROLE,BOOT);
 }
 
 function localLogout() {
@@ -343,7 +343,7 @@ document.addEventListener('click',async event=>{
 });
 
 function setTheme(theme){document.documentElement.dataset.theme=theme;$('#thm').setAttribute('aria-label',theme==='dark'?'Aktifkan tema terang':'Aktifkan tema gelap');$('#thm').setAttribute('aria-pressed',theme==='dark')}
-try{setTheme(localStorage.getItem('rpd_theme')==='dark'?'dark':'light');localStorage.removeItem('rpd_ov')}catch{setTheme('light')}
+try{setTheme(localStorage.getItem('rpd_theme')==='dark'?'dark':'light');if(!window.RPDStatic)localStorage.removeItem('rpd_ov')}catch{setTheme('light')}
 $('#thm').onclick=()=>{const theme=document.documentElement.dataset.theme==='dark'?'light':'dark';setTheme(theme);try{localStorage.setItem('rpd_theme',theme)}catch{}};
 $('#login-form').onsubmit=event=>{event.preventDefault();go()};
 $('#out').onclick=async()=>{try{await api('/api/logout',{method:'POST'})}catch{}finally{localLogout()}};

@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const root=new URL('../',document.currentScript.src),encoder=new TextEncoder();
-  let worker=null,nextId=0,pending=new Map(),queue=Promise.resolve(),key=null,storageKey='',cachedRaw=null,events=[],actor='',manifest=null,generation=0;
+  let worker=null,nextId=0,pending=new Map(),queue=Promise.resolve(),key=null,storageKey='',cachedRaw=null,events=[],actor='',manifest=null,generation=0,legacyRaw=null,legacyValid=false;
   const b64=bytes=>{let value='';for(let i=0;i<bytes.length;i+=32768)value+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(value)};
   const bytes=value=>Uint8Array.from(atob(value),character=>character.charCodeAt(0));
   const hash=async value=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',value)),byte=>byte.toString(16).padStart(2,'0')).join('');
@@ -62,7 +62,40 @@
   function script(path){return new Promise((resolve,reject)=>{const element=document.createElement('script');element.src=new URL(path,root);element.onload=resolve;element.onerror=()=>{element.remove();reject(new Error('PDF lokal tidak dapat dimuat. Coba kembali.'))};document.head.appendChild(element)})}
   async function pdfLibraries(){if(!pdfReady)pdfReady=(async()=>{const assets=await jsonFile('pages/vendor/manifest.json');for(const item of assets.javascript)await script('pages/vendor/'+item.path);await script('pages/pdf.js?v='+manifest.pdf)})().catch(error=>{pdfReady=null;throw error});return pdfReady}
   async function download(path,name){const report=await request(path);if(report.pdf_model){await pdfLibraries();saveBlob(new Blob([window.RPDPDF.renderPDF(report.pdf_model,window.jspdf.jsPDF,window.autoTable)],{type:'application/pdf'}),name)}else saveBlob(new Blob([bytes(report.binary)],{type:report.media_type}),name)}
-  function ready(role){const controls=document.getElementById('local-history-controls');if(controls)controls.hidden=role!=='owner'}
+  function ready(role,boot){
+    const controls=document.getElementById('local-history-controls');if(controls)controls.hidden=role!=='owner';
+    const legacy=document.getElementById('legacy-mapping-controls');if(!legacy)return;legacy.hidden=true;legacyRaw=null;legacyValid=false;
+    if(role!=='owner')return;
+    try{legacyRaw=localStorage.getItem('rpd_ov');if(!legacyRaw)return;
+      const values=JSON.parse(legacyRaw);legacyValid=values!==null&&typeof values==='object'&&!Array.isArray(values);
+      if(legacyValid&&!Object.keys(values).length)return;
+      legacy.hidden=false;legacy.open=true;
+      const preview=document.getElementById('legacy-mapping-preview');preview.replaceChildren();
+      if(legacyValid)for(const [index,value]of Object.entries(values)){
+        const name=/^(0|[1-9]\d*)$/.test(index)?boot.data.svs[Number(index)]:null;
+        if(!name)legacyValid=false;
+        const row=document.createElement('p');row.textContent='Indeks '+index+' · '+(name||'Tidak ada pada sumber aktif')+' · '+JSON.stringify(value);preview.appendChild(row);
+      }
+      document.getElementById('confirm-legacy-mapping').checked=false;
+      document.getElementById('import-legacy-mapping').disabled=true;
+      document.getElementById('legacy-mapping-status').textContent=legacyValid?'Belum diimpor. Verifikasi nomor urut dengan sumber lama; jangan menebak identitas.':'Pemetaan tidak cocok dengan sumber aktif. Salinan lama dipertahankan; unduh untuk rekonsiliasi manual.';
+    }catch{legacy.hidden=false;document.getElementById('legacy-mapping-status').textContent='Salinan lama tidak dapat dibaca; tetap dipertahankan dan dapat diunduh.'}
+  }
+  document.addEventListener('change',event=>{if(event.target.id==='confirm-legacy-mapping')document.getElementById('import-legacy-mapping').disabled=!event.target.checked||!legacyValid});
+  document.addEventListener('click',async event=>{
+    if(event.target.id==='backup-legacy-mapping'&&legacyRaw!==null)saveBlob(new Blob([legacyRaw],{type:'application/json'}),'RPD-legacy-mapping-local.json');
+    if(event.target.id!=='import-legacy-mapping')return;
+    const status=document.getElementById('legacy-mapping-status');event.target.disabled=true;
+    try{
+      if(!legacyValid||!document.getElementById('confirm-legacy-mapping').checked)throw new Error('Verifikasi identitas terlebih dahulu.');
+      if(localStorage.getItem('rpd_ov')!==legacyRaw)throw new Error('Salinan lama berubah di tab lain. Muat ulang sebelum mengimpor.');
+      const current=await request('/api/bootstrap'),values=JSON.parse(legacyRaw);
+      for(const [index,value]of Object.entries(current.overrides))values[index]={...values[index],...value};
+      await request('/api/admin/mappings',{method:'PUT',body:JSON.stringify({version:current.mapping_version,values})});
+      if(localStorage.getItem('rpd_ov')===legacyRaw)localStorage.removeItem('rpd_ov');
+      location.reload();
+    }catch(error){status.textContent=error.message;event.target.disabled=false}
+  });
   document.addEventListener('click',async event=>{const button=event.target.closest('#backup-local');if(!button)return;try{if(!key)throw new Error('Masuk terlebih dahulu.');saveBlob(new Blob([await encrypt(events)],{type:'application/json'}),'RPD-encrypted-local-history.json')}catch(error){document.getElementById('service-status').textContent=error.message}});
   document.addEventListener('change',async event=>{if(event.target.id!=='restore-local'||!event.target.files.length)return;try{const file=event.target.files[0];if(file.size>4500000)throw new Error('Berkas cadangan terlalu besar.');const next=await openState(await file.text());await locked(async()=>{if(events.length)throw new Error('Pemulihan hanya pada riwayat lokal kosong; riwayat yang ada tidak ditimpa.');await call({type:'restore',events:next});try{await persist(next)}catch(error){await call({type:'restore',events});throw error}});location.reload()}catch(error){document.getElementById('service-status').textContent=error.message}finally{event.target.value=''}});
   window.RPDStatic=Object.freeze({request,download,ready,stop});
