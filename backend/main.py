@@ -190,8 +190,9 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
     def login(body: Login, request: Request, response: Response):
         if not origin or not source_path.is_file() or (not dev and not origin.startswith("https://")):
             raise HTTPException(503, "Backend privat belum dikonfigurasi. GitHub Pages tidak menyediakan akses data.")
-        peer = (request.client.host if request.client else 'unknown', user_key(body.account))
-        if sessions.limited(peer) or not sessions.login_slots.acquire(blocking=False):
+        client=request.client.host if request.client else 'unknown'
+        peer = (client,user_key(body.account))
+        if sessions.limited(peer) or sessions.limited(client,100) or not sessions.login_slots.acquire(blocking=False):
             raise HTTPException(429, "Terlalu banyak percobaan. Coba kembali setelah 15 menit.")
         try:
             stamp = source_stamp()
@@ -205,6 +206,7 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
             raise HTTPException(503, "Sumber data privat tidak tersedia.")
         except Exception:
             sessions.failed(peer)
+            sessions.failed(client)
             raise HTTPException(401, "ID atau kata sandi tidak valid, atau kontrak data belum tervalidasi.")
         finally:
             sessions.login_slots.release()

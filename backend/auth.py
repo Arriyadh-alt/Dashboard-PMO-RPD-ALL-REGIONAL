@@ -82,10 +82,10 @@ class Sessions:
             if not entries:
                 del self.failures[key]
 
-    def limited(self, peer):
+    def limited(self, peer, limit=10):
         with self.lock:
             self._prune(time.monotonic())
-            return len(self.failures.get(peer, ())) >= 10
+            return len(self.failures.get(peer, ())) >= limit
 
     def failed(self, peer):
         with self.lock:
