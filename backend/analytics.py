@@ -199,7 +199,7 @@ def quality(data, prepared):
 
 def priority(metrics, context, rules):
     if context.get("supply") == "constrained":
-        return "Requires Supply Improvement", context.get("evidence", "")
+        return "Requires Supply Improvement", "Supply terkonfirmasi terbatas; verifikasi perbaikan sebelum penambahan canvassing. Bukti rinci hanya tersedia untuk administrator."
     if context.get("supply") != "ready" or context.get("readiness") != "ready":
         return "Insufficient Data", "Supply dan kesiapan pemasangan belum dikonfirmasi; bukan rekomendasi canvassing."
     if metrics["canvassed"] < rules["minimum_sample"]:

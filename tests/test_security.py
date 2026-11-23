@@ -1,3 +1,11 @@
+def test_viewer_does_not_receive_private_readiness_evidence(signed):
+    client,_=signed()
+    private='PRIVATE-PAM-12345678-CONTACT'
+    assert client.post('/api/admin/area-context',json={'area':0,'supply':'constrained','readiness':'unknown','evidence':private}).status_code==200
+    client,_=signed('guest')
+    assert private not in client.get('/api/analysis').text
+    assert private not in client.get('/api/reports/area.csv').content.decode('utf-8-sig')
+
 import time
 
 import pytest
