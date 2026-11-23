@@ -40,8 +40,13 @@ def label(data, field, value):
     return str(values[value]) if isinstance(value, int) and 0 <= value < len(values) else ""
 
 
+def area_key(data, index):
+    region, name = str(data['reg'][index]).strip().casefold(), str(data['abs'][index]).strip().casefold()
+    return hashlib.sha256(f"{len(region)}:{region}{name}".encode()).hexdigest()[:24]
+
+
 def case_ref(row):
-    identity = f"{row['pam']}|{row['ab']}|{row['date']}"
+    identity = f"{row['pam']}|{row['area_key']}|{row['date']}"
     return hashlib.sha256(identity.encode()).hexdigest()[:24]
 
 
@@ -70,6 +75,7 @@ def prepare(data):
         row["status"] = label(data, "kf", row["kf"]).strip() or "Tidak tercatat"
         row["installed"] = row["status"].casefold() == "done"
         row["cancelled"] = row["status"].casefold() == "cancel"
+        row['area_key'] = area_key(data, row['ab']) if isinstance(row['ab'], int) and 0 <= row['ab'] < len(data['abs']) else 'unmapped'
         row["ref"] = case_ref(row)
         if row["valid"]:
             locations[row["pam"]].add((row["ab"], row["kel"]))
@@ -243,7 +249,7 @@ def build_analysis(data, prepared, filters, store, role):
                      "last_activity": max(row["date"] for row in subset).isoformat() if subset else None,
                      "obstacles": dict(Counter(label(data, "kd", row["kd"]) for row in subset if label(data, "kd", row["kd"])))}
             if kind == "area":
-                entry["priority"], entry["reason"] = priority(group, contexts.get(str(value), {}), rules)
+                entry["priority"], entry["reason"] = priority(group, contexts.get(area_key(data, value), {}), rules)
                 entry["regional"] = data["reg"][value]
             destinations.append(entry)
     grouped_teams = defaultdict(list)
@@ -331,8 +337,8 @@ def build_analysis(data, prepared, filters, store, role):
                       "history": "Perbandingan kohort tanggal survei dengan status pada impor saat ini; bukan snapshot status historis."}}
 
 
-def target_ref(month, region, area):
-    return f"{month}|{region}|{area}"
+def target_ref(month, region, area, data):
+    return f"{month}|{region}|{area_key(data, area) if area >= 0 else 'all'}"
 
 
 def target_analysis(data, prepared, filters, store, overrides):
@@ -341,7 +347,7 @@ def target_analysis(data, prepared, filters, store, overrides):
         return {**unavailable, "reason": "Insufficient Data: target hanya untuk bulan penuh dan cakupan regional/area yang sama."}
     months = data["months"][int(filters.get("m0", 0)):int(filters.get("m1", len(data["months"]) - 1)) + 1]
     targets = store.latest("target")
-    entries = [targets.get(target_ref(month, filters.get("reg", ""), int(filters.get("ab", -1)))) for month in months]
+    entries = [targets.get(target_ref(month, filters.get("reg", ""), int(filters.get("ab", -1)), data)) for month in months]
     if not all(entries):
         return unavailable
     total = sum(entry["target"] for entry in entries)

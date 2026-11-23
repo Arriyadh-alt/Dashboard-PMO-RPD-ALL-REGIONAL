@@ -7,7 +7,28 @@ import sqlite3
 from openpyxl import load_workbook
 import pytest
 
-from backend.analytics import DEFAULT_RULES, build_analysis, prepare, priority
+from backend.analytics import DEFAULT_RULES, area_key, build_analysis, prepare, priority, target_ref
+from backend.store import Store
+def test_operations_keep_area_identity_after_import_reordering(tmp_path):
+    data=fixture_data()
+    store=Store(tmp_path/'operations.sqlite3')
+    original=prepare(data)
+    ref=original['rows'][0]['ref']
+    store.append('followup',ref,'fixture',{'status':'Outstanding','pic':'Verified PIC'})
+    store.append('area_context',area_key(data,0),'fixture',{'supply':'constrained','evidence':'verified'})
+    store.append('target',target_ref('2026-11','Barat',0,data),'fixture',{'target':12})
+    data['abs'].reverse();data['reg'].reverse()
+    for key,area_column in [('A',1),('S',1),('E',1),('P',0),('W',0)]:
+        for row in data[key]: row[area_column]=1-row[area_column]
+    data['rec']['ab']=[1-value for value in data['rec']['ab']]
+    refreshed=prepare(data)
+    assert refreshed['rows'][0]['ref']==ref
+    assert store.latest('followup')[ref]['pic']=='Verified PIC'
+    report=build_analysis(data,refreshed,{'m0':2,'m1':2,'reg':'Barat','ab':1},store,'owner')
+    assert report['target']['target']==12
+    assert report['areas'][0]['name']=='Fixture Area A'
+    assert report['areas'][0]['priority']=='Requires Supply Improvement'
+
 from backend.auth import decrypt_source
 from tests.fixtures import fixture_data
 

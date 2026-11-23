@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from .analytics import (DEFAULT_RULES, build_analysis, coordinator, label, matches, period_bounds,
+from .analytics import (DEFAULT_RULES, area_key, build_analysis, coordinator, label, matches, period_bounds,
                         prepare, quality, record_view, scoped_rows, target_ref)
 from .auth import Sessions, decrypt_source, user_key
 from .exports import TITLES, make_report
@@ -311,7 +311,8 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
             raise HTTPException(422, "Bulan/regional/area target tidak valid.")
         if body.area >= 0 and source["reg"][body.area] != body.region:
             raise HTTPException(422, "Regional target harus cocok dengan area bisnis.")
-        store.append("target", target_ref(body.month, body.region, body.area), session.actor, body.model_dump())
+        payload={**body.model_dump(), 'area_name':source['abs'][body.area] if body.area >= 0 else ''}
+        store.append("target", target_ref(body.month, body.region, body.area, source), session.actor, payload)
         return {"ok": True}
 
     @app.put("/api/admin/rules")
@@ -323,14 +324,17 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
     def area_context(body: AreaContext, session=Depends(administrator)):
         if body.area >= len(session.data["source"]["abs"]):
             raise HTTPException(422, "Area tidak valid.")
-        store.append("area_context", str(body.area), session.actor, body.model_dump())
+        source=session.data['source']
+        store.append("area_context", area_key(source, body.area), session.actor, {**body.model_dump(), 'area_name':source['abs'][body.area], 'region':source['reg'][body.area]})
         return {"ok": True}
 
     @app.get("/api/admin/audit")
     def audit(limit: int = Query(100, ge=1, le=1000), before: int | None = Query(None, ge=1), session=Depends(administrator)):
         events = store.history(limit=limit, before=before)
+        contexts=store.latest('area_context')
+        current={str(index):contexts[area_key(session.data['source'],index)] for index in range(len(session.data['source']['abs'])) if area_key(session.data['source'],index) in contexts}
         return {"events": events, "next_before": events[-1]["id"] if len(events) == limit else None, "targets": store.latest("target"),
-                "area_context": store.latest("area_context"), "rules": {**DEFAULT_RULES, **store.latest("rules").get("all", {})}}
+                "area_context": current, "rules": {**DEFAULT_RULES, **store.latest("rules").get("all", {})}}
 
     @app.get("/api/reports/{kind}.{extension}")
     def export(kind: str, extension: str, request: Request, session=Depends(authenticated)):
