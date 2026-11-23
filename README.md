@@ -37,7 +37,27 @@ The supplied RPD binary workbook has one `Update ...` sheet and one `MASTER DATA
 
 The command prints aggregate counts, actual survey/FA/meter date ranges and normalized cross-sheet geography differences, and writes a new private file with mode `0600`; it refuses an existing output or any workbook/output inside the repository. PAM IDs use the existing matching normalization; nonempty invalid IDs retain `pam_raw` for private correction and every row keeps its workbook row number. Regional/area comparison strips only the verified `Regional ` / `AB ` prefixes, case and repeated whitespace; it does not correct either source. Duplicate IDs remain counted, but their geographic comparisons are withheld rather than choosing an arbitrary row. A filename date is not treated as a survey date or a verified refresh timestamp. Layout changes fail with the missing column names instead of silently selecting different data.
 
-**Intake is not publication.** It does not infer snapshot/incremental semantics, rebuild coordinator aliases, replace the current encrypted contract or modify existing logins. Compare it with the authorized previous contract, reconcile the source fields/legacy classifications and roster mappings, then use the validated-contract encryption workflow below. A workbook alone cannot recover the existing encryption key or administrator password.
+**Intake is not publication.** It does not infer snapshot/incremental semantics, rebuild coordinator aliases, replace the current encrypted contract or modify existing logins. Version 2 additionally selects the PMO recommendation and **Total_Tunggakan_&_Denda**, which is the existing contract's `tg` value (not bare `Tunggakan`). Old version 1 intakes must be regenerated. A workbook alone cannot recover the existing encryption key or administrator password.
+
+### Verified cumulative-workbook mapping
+
+The authorized mapper preserves the existing area/kelurahan/surveyor indices, curated names, roster statuses, coordinator assignments and first `s.d.` month bucket. It rebuilds every record column, the legacy `A/S/K/E` survey/event groups, `P/W` master stock and reconciliation counters. Interest deductions follow the master geography, not a conflicting survey location. Dates come from actual date columns; filename/Month/Year labels are not used. New reporting months are appended when needed. Changed snapshots regenerate the unfiltered all-surveyor PDF from the current source totals rather than silently retaining yesterday's PDF.
+
+The private alias sidecar associates workbook labels with the existing curated roster; it is sensitive and must not enter Git. Bootstrap it **only from an already-matching baseline workbook**. Bootstrap uses PAM associations, then requires exact parity of *all* record columns, classifications, metadata and aggregate groups before writing anything. It preserves the baseline's curated identities; it is not a general-purpose fuzzy-name match or proof that a changed personnel label is the same person.
+
+```sh
+# Existing administrator credentials are prompted privately, or bound securely as
+# RPD_UPDATE_ACCOUNT / RPD_UPDATE_PASSWORD. Never put credentials in commands.
+.venv/bin/python -m scripts.workbook_contract pages/data.enc.json /secure/intake-NEW.json /secure/validated-NEW.json \
+  --full-snapshot --aliases /secure/roster-aliases.json --bootstrap-aliases
+# Subsequent complete snapshots reuse that private sidecar (omit bootstrap).
+.venv/bin/python -m scripts.workbook_contract pages/data.enc.json /secure/intake-NEXT.json /secure/validated-NEXT.json \
+  --full-snapshot --aliases /secure/roster-aliases.json
+```
+
+`--full-snapshot` is an explicit operator confirmation, not something the mapper infers. Invalid/duplicate PAMs, missing existing survey/known-master IDs, unfamiliar geography/classifications, unknown surveyors and ambiguous coordinator assignments stop conversion for review; no records are guessed, appended twice or silently deleted. New surveyors or legitimate removals require a separately reviewed source/roster migration. Master IDs never represented in the baseline survey cannot be reconstructed from its aggregates, so the operator must still verify complete master-sheet coverage. The mapper is deliberately not an incremental-data importer.
+
+The command writes a new private contract with mode `0600` and prints aggregate results only; all plaintext input/output paths must be outside this repository. If it reports `changed: false`, the workbook is already represented: **skip encryption and publication**, preserving the live ciphertext, existing logins, local-history salt and publication timestamp. If `changed: true`, check totals and use the encrypted publishing workflow below. Neither mapping nor encryption publishes anything by itself.
 
 After that review, the repeatable encrypted publishing path is:
 

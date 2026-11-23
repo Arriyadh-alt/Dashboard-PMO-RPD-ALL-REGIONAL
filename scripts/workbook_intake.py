@@ -28,6 +28,7 @@ SURVEY_COLUMNS = {
     'area': '3. Area Bisnis', 'surveyor': '4. Nama Surveyor', 'pam': '5. PAM ID',
     'kelurahan': 'Kelurahan', 'installation_status': 'Konfirmasi Pemasangan',
     'result': 'Hasil Canvasing', 'result_detail': 'Hasil Canvasing 2',
+    'recommendation': '17. Rekomendasi - PMO',
     'obstacle': 'Flag Kendala', 'fa_date': 'Tanggal Assign FA',
     'meter_date': 'Tanggal Meter Terpasang',
 }
@@ -36,6 +37,7 @@ MASTER_COLUMNS = {
     'rw': 'RW', 'rt': 'RT', 'master_flag': 'FINAL FLAG',
     'potential_status': 'Data Potensi', 'customer_status': 'STATCUST',
     'arrears': 'Tunggakan',
+    'total_arrears': 'Total_Tunggakan_&_Denda',
 }
 
 
@@ -190,7 +192,7 @@ def read_intake(path):
                'installation_counts': dict(Counter(text(row['installation_status']) for row in survey)),
                'master_flag_counts': dict(Counter(text(row['master_flag']) for row in master)),
                'cross_sheet': reconcile(survey, master)}
-    return {'layout_version': 1, 'workbook_sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+    return {'layout_version': 2, 'workbook_sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
             'sheets': {'survey': updates[0], 'master': masters[0]},
             'date_system': '1904' if date1904 else '1900',
             'survey': survey, 'master': master, 'summary': summary}

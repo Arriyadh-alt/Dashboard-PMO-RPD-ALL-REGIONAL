@@ -21,13 +21,15 @@ Daily publishing accepts an encrypted contract, never an unverified workbook lay
 - `S`: `[month, area, coordinator index, surveyor index, canvassed rows, interested, Done, Assign FA, Outstanding, Cancel, ...]`. Its first six measures use a different order from `A`.
 - `E`: `[event month, area, assigned FA events, installed-meter events]`.
 - `P`: `[area, kelurahan, master potential, matched interested deduction, installed among matched interested]`.
-- `W`: `[area, kelurahan, RW, RT, master potential, matched interested deduction]`.
+- `W`: `[area, kelurahan, RW, RT, master potential, matched interested deduction, installed among matched interested]` (the final field is retained even though the legacy geographic table uses only the first six).
 
 The first month bucket can contain earlier dates (`s.d.`). The legacy reports retain their original calculations, grouping, seven-coordinator subtotal, named owner drill-down, and all-surveyor PDF. They are visibly labeled month/regional/area-only; advanced filters do not silently appear to apply to them. The master geographic hierarchy is not assumed to be a verified customer-coordinate or customer-RT mapping.
 
 ## New unique survey cohort
 
 Record columns are `pam, ab, kel, sv, mi, t, c1, kf, fa, mt, kd, mf, pr, sc, tg`. They must all have the same length. Source dates use YYMMDD (YYYYMMDD is also accepted). Labels come from `dic`; source operational statuses are preserved, including unrecognized ones. No source row is deleted or rewritten.
+
+The verified cumulative-workbook adapter additionally preserves legacy `c2` (Hasil Canvasing 2) and `rp` (PMO recommendation). `tg` is rounded **Total_Tunggakan_&_Denda**, not bare Tunggakan. Legacy `K` is `[month, area, kelurahan, survey rows, rows excluding no-building/PTD, interested, Done, Assign FA, Outstanding, Cancel, uninterested, unknown]`. The first reporting bucket includes earlier survey **and event** dates. New/unreviewed classifications are rejected by this adapter until their legacy classification rules are reviewed; the runtime itself still discloses unrecognized source statuses rather than silently recoding them.
 
 1. Mandatory validity checks: positive numeric PAM ID of at most nine digits, valid survey date, and mappable area/kelurahan/surveyor indices. Source PAM IDs lose presentation-only leading zeros for matching; lookup restores regional display width.
 2. Apply the selected survey-date window, regional, area, kelurahan, mapped coordinator and actual source installation-status filters to valid rows.
