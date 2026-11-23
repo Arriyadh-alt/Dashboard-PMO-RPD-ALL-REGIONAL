@@ -70,7 +70,7 @@ function presetList() {try{const data=JSON.parse(localStorage.getItem('rpd_filte
 function savePresetList(value){try{localStorage.setItem('rpd_filter_presets',JSON.stringify(value))}catch{setStatus('Preset tidak dapat disimpan pada peramban ini.')}}
 
 function presetScope(){
-  return {version:2,scope:scopeObject(),period:[D.months[S.m0],D.months[S.m1]],areaKey:S.ab>=0?BOOT.area_keys[S.ab]:null,kelName:S.kel>=0?D.kels[S.kel]:null};
+  return {version:2,scope:scopeObject(),period:[D.months[S.m0],D.months[S.m1]],openingBucket:S.m0===0,areaKey:S.ab>=0?BOOT.area_keys[S.ab]:null,kelName:S.kel>=0?D.kels[S.kel]:null};
 }
 
 function resolvePreset(value){
@@ -78,6 +78,7 @@ function resolvePreset(value){
   const scope=value.scope,m0=D.months.indexOf(value.period[0]),m1=D.months.indexOf(value.period[1]);
   const ab=value.areaKey===null?-1:BOOT.area_keys.indexOf(value.areaKey);
   if(m0<0||m1<m0||(value.areaKey!==null&&ab<0))return null;
+  if(!scope.start&&value.openingBucket!==(m0===0))return null;
   const reg=scope.reg&&ab>=0?D.reg[ab]:scope.reg||'';
   if(reg&&!D.reg.includes(reg))return null;
   const geography=BOOT.geography.filter(([area])=>(!reg||D.reg[area]===reg)&&(ab<0||area===ab));

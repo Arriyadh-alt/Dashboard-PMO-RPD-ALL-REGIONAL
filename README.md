@@ -81,6 +81,7 @@ Missing target calendars, verified case starts/pauses, attendance, state snapsho
 .venv/bin/python scripts/check_public.py
 node --check web/app.js
 node --check web/command-center.js
+node --test tests/preset_scope.test.cjs
 .venv/bin/python -m pip_audit --progress-spinner off
 ```
 

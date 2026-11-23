@@ -21,4 +21,5 @@ jobs:
       - run: python -m pytest -q
       - run: python scripts/check_public.py
       - run: node --check web/app.js && node --check web/command-center.js
+      - run: node --test tests/preset_scope.test.cjs
       - run: python -m pip_audit --progress-spinner off
