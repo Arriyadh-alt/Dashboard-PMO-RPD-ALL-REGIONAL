@@ -57,9 +57,13 @@ def date_system(path):
         raw = archive.read('xl/workbook.bin')
     reader = BIFF12Reader(io.BytesIO(raw))
     while True:
-        record, length = reader.read_id(), reader.read_len()
-        if record is None or length is None:
-            raise ValueError('Workbook date system is unavailable')
+        record = reader.read_id()
+        if record is None:
+            # BrtWbProp is optional; its omitted f1904 defaults to false.
+            return False
+        length = reader.read_len()
+        if length is None:
+            raise ValueError('Truncated workbook record')
         payload = reader._fp.read(length)
         if len(payload) != length:
             raise ValueError('Truncated workbook properties')

@@ -61,7 +61,8 @@ def binary_fixture(path, date1904=False, missing=None):
     master = {name: '' for name in MASTER_COLUMNS.values()}
     master.update({'PAM_ID': '000000123', 'FINAL FLAG': 'POTENSI', 'Tunggakan': 1000})
     master_part = sheet(MASTER_COLUMNS, master)
-    wb = record(biff12.WORKBOOKPR, struct.pack('<I', int(date1904))) + record(biff12.SHEETS)
+    wb = b'' if date1904 is None else record(biff12.WORKBOOKPR, struct.pack('<I', int(date1904)))
+    wb += record(biff12.SHEETS)
     for i, name in enumerate(('Update data TEST', 'MASTER DATA'), 1):
         wb += record(biff12.SHEET, struct.pack('<II', 0, i) + string('rId'+str(i)) + string(name))
     wb += record(biff12.SHEETS_END)
@@ -120,6 +121,15 @@ def test_actual_workbook_date_system_is_respected(tmp_path):
 def test_late_timestamps_cannot_round_into_the_next_calendar_day():
     assert excel_date(45658 + 86399.9 / 86400) == '2025-01-01'
     assert excel_date(45658 + 86399.999 / 86400, date1904=True) == excel_date(45658, date1904=True)
+
+
+def test_omitted_optional_workbook_properties_default_to_1900(tmp_path):
+    source = tmp_path/'synthetic.xlsb'
+    binary_fixture(source, date1904=None)
+    assert date_system(source) is False
+    intake = read_intake(source)
+    assert intake['date_system'] == '1900'
+    assert intake['survey'][0]['survey_date'] == '2025-01-01'
 
 
 def test_plaintext_repository_paths_are_refused():
