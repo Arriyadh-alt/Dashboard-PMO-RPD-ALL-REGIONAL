@@ -154,13 +154,22 @@ class BrowserAPI:
             return dict(ok=True,event_id=store.append('followup',ref,self.actor,payload))
         if route=='/api/admin/mappings':
             values=body.get('values',{});active=set(source['svs'])
-            converted={name:value for name,value in store.latest('mapping').get('all',{}).items() if name not in active}
+            previous=store.latest('mapping').get('all',{})
+            converted={name:value for name,value in previous.items() if name not in active}
             allowed=[*source['meta'].get('korlaps',[]),'PENGAWAS','BELUM TERDAFTAR','AKUN GENERIK']
             if not isinstance(values,dict) or len(values)>len(source['svs']): raise ValueError('Invalid mapping')
             for index,value in values.items():
                 index=integer(index,0,len(source['svs'])-1)
-                if not isinstance(value,dict) or set(value)-{'kl','st'} or ('kl' in value and value['kl'] not in allowed) or ('st' in value and (type(value['st']) is not int or value['st'] not in (0,1,2))): raise ValueError('Invalid coordinator/status')
-                converted[source['svs'][index]]=value
+                name=source['svs'][index]
+                if not isinstance(value,dict) or set(value)-{'kl','st'}: raise ValueError('Invalid coordinator/status')
+                # The editor round-trips the complete active map. A coordinator
+                # removed from a later source may remain ONLY for the surveyor
+                # already assigned to it; never allow a new retired assignment.
+                if 'kl' in value and (not isinstance(value['kl'],str) or
+                    (value['kl'] not in allowed and value['kl']!=previous.get(name,{}).get('kl'))):
+                    raise ValueError('Invalid coordinator/status')
+                if 'st' in value and (type(value['st']) is not int or value['st'] not in (0,1,2)): raise ValueError('Invalid coordinator/status')
+                converted[name]=value
             return dict(ok=True,version=store.append_if_current('mapping','all',self.actor,converted,integer(body.get('version',0),0,10**9)))
         if route=='/api/admin/targets':
             month=text(body,'month',7,True);region=text(body,'region',100);area=integer(body.get('area',-1),-1,len(source['abs'])-1)

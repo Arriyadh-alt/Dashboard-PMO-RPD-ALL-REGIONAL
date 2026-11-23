@@ -69,3 +69,28 @@ def test_mapping_survives_absent_surveyor_and_current_roster_edits():
     absent.request('/api/admin/mappings','PUT',{'version':2,'values':{}})
     returned=BrowserAPI(fixture_data(),'owner','actor',app.info,absent.store.events)
     assert returned.bootstrap()['overrides']=={'1':{'st':1}}
+
+
+def test_returned_surveyor_retired_coordinator_does_not_block_unrelated_edits():
+    app=browser()
+    app.request('/api/admin/mappings','PUT',{'version':0,'values':{'1':{'kl':'Fixture Team B','st':1}}})
+    daily=fixture_data()
+    daily['svs'][1]='FIXTURE TEMPORARY SURVEYOR C'
+    daily['meta']['korlaps']=['Fixture Team A','Fixture Team C']
+    daily['kl'][1]='Fixture Team C'
+    absent=BrowserAPI(daily,'owner','actor',app.info,app.store.events)
+    absent.request('/api/admin/mappings','PUT',{'version':1,'values':{'0':{'st':2}}})
+    daily['svs'][1]='FIXTURE SURVEYOR B'
+    returned=BrowserAPI(daily,'owner','actor',app.info,absent.store.events)
+    values=returned.bootstrap()['overrides']
+    values['0']={'kl':'Fixture Team C'}
+    returned.request('/api/admin/mappings','PUT',{'version':2,'values':values})
+    assert returned.bootstrap()['overrides']['1']=={'kl':'Fixture Team B','st':1}
+    assert returned.bootstrap()['overrides']['0']=={'kl':'Fixture Team C'}
+    for invalid in [{'0':{'kl':'Fixture Team B'}},{'0':{'kl':None}},{'0':{'kl':123}},{'1':{'st':True}}]:
+        with pytest.raises(ValueError,match='coordinator/status'):
+            returned.request('/api/admin/mappings','PUT',{'version':3,'values':invalid})
+    # Moving the archived assignment to a current coordinator removes its exemption.
+    returned.request('/api/admin/mappings','PUT',{'version':3,'values':{'1':{'kl':'Fixture Team C'}}})
+    with pytest.raises(ValueError,match='coordinator/status'):
+        returned.request('/api/admin/mappings','PUT',{'version':4,'values':{'1':{'kl':'Fixture Team B'}}})
