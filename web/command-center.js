@@ -243,6 +243,14 @@ async function loadGovernance(revision) {
   catch(error){if(revision===viewRevision)setStatus(error.message)}
 }
 
+function revealSelectedTab(){
+  const nav=document.querySelector('.tabs'),selected=nav.querySelector('[aria-selected="true"]');
+  if(!selected||nav.scrollWidth<=nav.clientWidth)return;
+  const viewport=nav.getBoundingClientRect(),tab=selected.getBoundingClientRect();
+  if(tab.left<viewport.left)nav.scrollLeft+=tab.left-viewport.left;
+  else if(tab.right>viewport.right)nav.scrollLeft+=tab.right-viewport.right;
+}
+
 function render() {
   if(!D)return;rememberLegacyPanel();const revision=++viewRevision;
   document.querySelectorAll('.tabs button').forEach(button=>{const active=button.dataset.tab===S.tab;button.setAttribute('aria-selected',active);button.tabIndex=active?0:-1});
@@ -310,7 +318,7 @@ document.addEventListener('change',async event=>{
 document.addEventListener('click',async event=>{
   const target=event.target.closest('button,th[data-i],tr[data-k]');if(!target)return;
   const route=target.dataset.tab||target.dataset.route;
-  if(route){S.tab=route;S.all=0;PAGE=0;setStatus('');render();if(target.dataset.route)$('#main').focus({preventScroll:true});return}
+  if(route){S.tab=route;S.all=0;PAGE=0;setStatus('');render();revealSelectedTab();if(target.dataset.route)$('#main').focus({preventScroll:true});return}
   if(target.id==='retry-analysis'){refresh();return}
   if(target.dataset.export){const buttons=[...document.querySelectorAll('[data-export]')];buttons.forEach(button=>button.disabled=true);setStatus('');try{const extension=target.dataset.export,kind=$('#report-kind').value;await download('/api/reports/'+kind+'.'+extension+'?'+params(),'RPD-'+kind+'.'+extension)}catch(error){setStatus(error.message)}finally{buttons.forEach(button=>button.disabled=false)}return}
   if(target.id==='rs'){Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,coordinator:'',statuses:[],start:'',end:'',q:'',open:'',openK:null,all:0,dq:{p:'',k:'',s:'',c:0,r:0,f:0,n:100}});$('#filter-search').value='';refresh();return}
