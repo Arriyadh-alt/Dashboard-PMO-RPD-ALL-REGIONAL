@@ -311,7 +311,7 @@ def build_analysis(data, prepared, filters, store, role):
             days = max(0, (today - date.fromisoformat(action["case_started"])).days - action.get("pause_days", 0))
             aging["0–3" if days <= 3 else "4–7" if days <= 7 else "8–14" if days <= 14 else "15–30" if days <= 30 else ">30"] += 1
     insights = []
-    eligible = [region for region in regions if region["interested"] and region["installation_rate"] is not None]
+    eligible = [region for region in regions if region['canvassed'] >= rules['minimum_sample'] and region["interested"] and region["installation_rate"] is not None]
     for region in eligible:
         if metrics["installation_rate"] is not None and region["installation_rate"] < metrics["installation_rate"]:
             insights.append({"severity": "High", "area": region["name"], "metric": region["installation_rate"],

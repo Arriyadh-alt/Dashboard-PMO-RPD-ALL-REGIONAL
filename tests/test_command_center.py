@@ -1,3 +1,12 @@
+def test_high_regional_insights_require_the_displayed_minimum_sample(tmp_path):
+    data=fixture_data()
+    for values in data['rec'].values(): values.append(values[0])
+    data['rec']['pam'][-1]=10000011
+    report=build_analysis(data,prepare(data),{},Store(tmp_path/'state.sqlite3'),'owner')
+    assert any(region['installation_rate']<report['metrics']['installation_rate'] for region in report['regions'])
+    assert all(region['canvassed']<report['rules']['minimum_sample'] for region in report['regions'])
+    assert not any(insight['severity']=='High' for insight in report['insights'])
+
 def test_bootstrap_includes_master_only_kelurahan(signed,app):
     client,_=signed()
     session=next(iter(app.state.sessions.values.values()))
