@@ -117,7 +117,7 @@ def make_report(kind, extension, analysis, data, prepared, filters, store, role,
     content.extend(Paragraph(escape(item), styles["BodyText"]) for item in metadata[1:])
     content.append(Spacer(1, 14))
     cells = [[Paragraph(escape(str(value if value is not None else "Insufficient Data")), styles["BodyText"]) for value in row] for row in [headers, *rows]]
-    table = LongTable(cells, repeatRows=1, colWidths=[(landscape(A4)[0] - 48) / len(headers)] * len(headers))
+    table = LongTable(cells, repeatRows=1, splitInRow=1, colWidths=[(landscape(A4)[0] - 48) / len(headers)] * len(headers))
     table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E8EFF5")),
                                ("VALIGN", (0, 0), (-1, -1), "TOP"), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                                ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#DEE5ED"))]))

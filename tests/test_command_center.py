@@ -1,3 +1,10 @@
+def test_long_followup_action_can_span_pdf_pages(signed):
+    client,_=signed()
+    ref=client.post('/api/records/search',json={'outstanding_only':True,'limit':1}).json()['rows'][0]['ref']
+    assert client.post('/api/followups/'+ref,json={'pic':'Fixture PIC','status':'Outstanding','action':('Evidence and follow-up task. '*100)[:2000]}).status_code==200
+    response=client.get('/api/reports/outstanding.pdf')
+    assert response.status_code==200 and response.content.startswith(b'%PDF')
+
 import csv
 from datetime import date, timedelta
 from io import BytesIO, StringIO
