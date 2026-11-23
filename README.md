@@ -26,6 +26,19 @@ After a same-account password change, unreadable local history is retained: repo
 
 Send the daily Excel file to the Bot. **The first workbook is needed to verify its sheet/column mapping; an authorized existing administrator credential is needed to preserve current logins when encrypting updates.** This repository does not guess an unprovided Excel layout. Confirm whether it is a complete snapshot or incremental input, reconcile unique counts, periods, master stock and duplicates, and create the documented columnar data contract outside the repository. Never append an already-cumulative workbook or label retained master data as freshly updated. Share operational notes through an agreed source workbook if they must reach the whole team; browser-local history is not that shared source.
 
+### Verified Excel Binary intake
+
+The supplied RPD binary workbook has one `Update ...` sheet and one `MASTER DATA` sheet. The read-only adapter validates column names rather than assuming positions, respects the workbook's 1900/1904 date system, and reads cached values without running Excel, macros or external links. It selects only dashboard-required fields; customer names, addresses, telephone numbers, identity-document links, coordinates and free-text customer notes are excluded. The resulting intake still contains sensitive PAM IDs and surveyor names and must remain outside Git and the public site.
+
+```sh
+.venv/bin/python -m pip install -r requirements-import.txt
+.venv/bin/python -m scripts.workbook_intake /secure/report.xlsb /secure/intake-NEW.json
+```
+
+The command prints aggregate counts, actual survey/FA/meter date ranges and normalized cross-sheet geography differences, and writes a new private file with mode `0600`; it refuses an existing output or any workbook/output inside the repository. PAM IDs use the existing matching normalization; nonempty invalid IDs retain `pam_raw` for private correction and every row keeps its workbook row number. Regional/area comparison strips only the verified `Regional ` / `AB ` prefixes, case and repeated whitespace; it does not correct either source. Duplicate IDs remain counted, but their geographic comparisons are withheld rather than choosing an arbitrary row. A filename date is not treated as a survey date or a verified refresh timestamp. Layout changes fail with the missing column names instead of silently selecting different data.
+
+**Intake is not publication.** It does not infer snapshot/incremental semantics, rebuild coordinator aliases, replace the current encrypted contract or modify existing logins. Compare it with the authorized previous contract, reconcile the source fields/legacy classifications and roster mappings, then use the validated-contract encryption workflow below. A workbook alone cannot recover the existing encryption key or administrator password.
+
 After that review, the repeatable encrypted publishing path is:
 
 ```sh
