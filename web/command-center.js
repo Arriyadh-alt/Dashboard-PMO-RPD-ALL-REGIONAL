@@ -69,6 +69,26 @@ async function refresh() {
 function presetList() {try{const data=JSON.parse(localStorage.getItem('rpd_filter_presets')||'{}');return data&&typeof data==='object'&&!Array.isArray(data)?data:{}}catch{return {}}}
 function savePresetList(value){try{localStorage.setItem('rpd_filter_presets',JSON.stringify(value))}catch{setStatus('Preset tidak dapat disimpan pada peramban ini.')}}
 
+function presetScope(){
+  return {version:2,scope:scopeObject(),period:[D.months[S.m0],D.months[S.m1]],areaKey:S.ab>=0?BOOT.area_keys[S.ab]:null,kelName:S.kel>=0?D.kels[S.kel]:null};
+}
+
+function resolvePreset(value){
+  if(value?.version!==2||!value.scope||!Array.isArray(value.period))return null;
+  const scope=value.scope,m0=D.months.indexOf(value.period[0]),m1=D.months.indexOf(value.period[1]);
+  const ab=value.areaKey===null?-1:BOOT.area_keys.indexOf(value.areaKey);
+  if(m0<0||m1<m0||(value.areaKey!==null&&ab<0))return null;
+  const reg=scope.reg&&ab>=0?D.reg[ab]:scope.reg||'';
+  if(reg&&!D.reg.includes(reg))return null;
+  const geography=BOOT.geography.filter(([area])=>(!reg||D.reg[area]===reg)&&(ab<0||area===ab));
+  const kelIds=[...new Set(geography.map(([,kel])=>kel))].filter(kel=>D.kels[kel]===value.kelName);
+  if(value.kelName!==null&&kelIds.length!==1)return null;
+  const coordinator=scope.coordinator||'',teams=D.S.filter(row=>(!reg||D.reg[row[1]]===reg)&&(ab<0||row[1]===ab)).map(eKl);
+  if(coordinator&&!teams.includes(coordinator))return null;
+  if(!Array.isArray(scope.statuses)||scope.statuses.some(status=>!D.dic.kf.includes(status)))return null;
+  return {m0,m1,reg,ab,kel:value.kelName===null?-1:kelIds[0],coordinator,statuses:scope.statuses,start:scope.start||'',end:scope.end||''};
+}
+
 function fill() {
   if(!D)return;
   if(!$('#fk'))$('#gf').insertAdjacentHTML('beforeend',`<details class="more-filters"><summary>Filter lanjutan &amp; preset</summary><div class="advanced-grid"><label class="field">Cari opsi wilayah<input id="filter-search" type="search" placeholder="Cari area / kelurahan"></label><label class="field">Kelurahan<select id="fk"></select></label><label class="field">Koordinator / tim<select id="fco"></select></label><label class="field">Status pemasangan (multi-pilih)<select id="fstatus" multiple size="3" aria-describedby="multi-status-help"></select><small id="multi-status-help">Ctrl/Cmd + klik untuk beberapa status.</small></label><label class="field">Tanggal survei mulai (opsional)<input id="fstart" type="date"></label><label class="field">Tanggal survei akhir (opsional)<input id="fend" type="date"></label></div><div class="preset-row"><label for="preset-name" class="sm">Preset</label><input id="preset-name" maxlength="50" placeholder="Nama filter tersimpan"><button id="save-preset">Simpan</button><select id="preset-list" aria-label="Preset filter"></select><button id="load-preset">Terapkan</button><button id="delete-preset">Hapus preset</button></div></details>`);
@@ -293,8 +313,8 @@ document.addEventListener('click',async event=>{
   if(target.id==='retry-analysis'){refresh();return}
   if(target.dataset.export){const buttons=[...document.querySelectorAll('[data-export]')];buttons.forEach(button=>button.disabled=true);setStatus('');try{const extension=target.dataset.export,kind=$('#report-kind').value;await download('/api/reports/'+kind+'.'+extension+'?'+params(),'RPD-'+kind+'.'+extension)}catch(error){setStatus(error.message)}finally{buttons.forEach(button=>button.disabled=false)}return}
   if(target.id==='rs'){Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,coordinator:'',statuses:[],start:'',end:'',q:'',open:'',openK:null,all:0,dq:{p:'',k:'',s:'',c:0,r:0,f:0,n:100}});$('#filter-search').value='';refresh();return}
-  if(target.id==='save-preset'){const name=$('#preset-name').value.trim();if(!name){setStatus('Masukkan nama preset.');return}const presets=presetList();Object.defineProperty(presets,name,{value:scopeObject(),enumerable:true,writable:true,configurable:true});savePresetList(presets);fill();setStatus('Preset filter disimpan tanpa data pelanggan.');return}
-  if(target.id==='load-preset'){const value=presetList()[$('#preset-list').value];if(!value||typeof value!=='object')return;Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,coordinator:'',statuses:[],start:'',end:''});for(const key of scopeKeys)if(Object.hasOwn(value,key))S[key]=value[key];S.m0=Math.max(0,Math.min(D.months.length-1,Number(S.m0)||0));S.m1=Math.max(S.m0,Math.min(D.months.length-1,Number(S.m1)||0));S.statuses=Array.isArray(S.statuses)?S.statuses.filter(status=>D.dic.kf.includes(status)):[];refresh();return}
+  if(target.id==='save-preset'){const name=$('#preset-name').value.trim();if(!name){setStatus('Masukkan nama preset.');return}const presets=presetList();Object.defineProperty(presets,name,{value:presetScope(),enumerable:true,writable:true,configurable:true});savePresetList(presets);fill();setStatus('Preset filter disimpan tanpa data pelanggan.');return}
+  if(target.id==='load-preset'){const value=presetList()[$('#preset-list').value];if(!value)return;const scope=resolvePreset(value);if(!scope){setStatus('Cakupan preset lama tidak dapat diverifikasi pada sumber aktif. Simpan ulang preset; filter tidak diubah.');return}Object.assign(S,scope);refresh();return}
   if(target.id==='delete-preset'){const presets=presetList();delete presets[$('#preset-list').value];savePresetList(presets);fill();return}
   if(target.dataset.region!==undefined){S.reg=target.dataset.region;S.ab=S.kel=-1;S.coordinator='';refresh();return}
   if(target.dataset.area!==undefined){S.ab=+target.dataset.area;S.reg=D.reg[S.ab];S.kel=-1;S.coordinator='';refresh();return}

@@ -170,6 +170,10 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
 
     def scope_dict(scope, session):
         values = scope.model_dump(mode="json", exclude_none=True)
+        source=session.data['source']
+        for field,dimension in [('ab','abs'),('kel','kels')]:
+            if values[field]>=len(source[dimension]):
+                raise HTTPException(422,'Filter wilayah tidak tersedia pada sumber aktif. Muat ulang atau simpan ulang preset.')
         values.setdefault("m1", len(session.data["source"]["months"]) - 1)
         try:
             period_bounds(session.data["source"], values)
@@ -235,6 +239,7 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
         pairs.update((row[0],row[1]) for row in [*source['P'],*source['W']] if len(row)>=2 and type(row[0]) is int and type(row[1]) is int and 0<=row[0]<len(source['abs']) and 0<=row[1]<len(source['kels']))
         geography=sorted(pairs)
         return {"data": safe, "overrides": indexed, 'mapping_version':mapping_events[0]['id'] if mapping_events else 0, "role": session.role, "geography": geography,
+                'area_keys':[area_key(source,index) for index in range(len(source['abs']))],
                 "data_owner": os.environ.get("RPD_DATA_OWNER", ""),
                 "csrf": session.csrf, "source": session.data["info"],
                 "capabilities": {"customer_detail": session.role == "owner", "attendance": False,
