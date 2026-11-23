@@ -5,13 +5,6 @@ import io
 from datetime import date
 from xml.sax.saxutils import escape
 
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import LongTable, Paragraph, SimpleDocTemplate, Spacer, TableStyle
-
 from .analytics import record_view, scoped_rows
 
 
@@ -85,7 +78,7 @@ def safe_cell(value):
     return value
 
 
-def make_report(kind, extension, analysis, data, prepared, filters, store, role, source):
+def report_content(kind, extension, analysis, data, prepared, filters, store, role, source):
     headers, rows = report_table(kind, analysis, data, prepared, filters, store, role)
     if len(rows) > (2000 if extension == "pdf" else 20000):
         raise ValueError("Laporan terlalu besar; persempit filter sebelum ekspor. Tidak ada baris yang dipotong diam-diam.")
@@ -94,6 +87,13 @@ def make_report(kind, extension, analysis, data, prepared, filters, store, role,
                 "Filters: " + filter_labels(data,filters), "Last successful import: " + (source.get("imported_at") or "Insufficient Data"),
                 "Source loaded at: " + source["loaded_at"], "Source fingerprint: " + source["fingerprint"],
                 DEFINITION, scope["history"], "Role: " + role]
+    if source.get('history_locked'):
+        metadata.append('Local operational history unavailable: previous password required. Source-only calculations; saved history has not been applied.')
+    return headers, rows, metadata
+
+
+def make_report(kind, extension, analysis, data, prepared, filters, store, role, source):
+    headers, rows, metadata = report_content(kind, extension, analysis, data, prepared, filters, store, role, source)
     if extension == "csv":
         output = io.StringIO(newline="")
         writer = csv.writer(output)
@@ -104,6 +104,8 @@ def make_report(kind, extension, analysis, data, prepared, filters, store, role,
         writer.writerows([[safe_cell(value) for value in row] for row in rows])
         return output.getvalue().encode("utf-8-sig"), "text/csv; charset=utf-8"
     if extension == "xlsx":
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = "Report"
@@ -129,6 +131,10 @@ def make_report(kind, extension, analysis, data, prepared, filters, store, role,
         output = io.BytesIO()
         workbook.save(output)
         return output.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import LongTable, Paragraph, SimpleDocTemplate, Spacer, TableStyle
     output = io.BytesIO()
     styles = getSampleStyleSheet()
     styles["BodyText"].fontSize = 8

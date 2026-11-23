@@ -1,0 +1,5 @@
+# Ciphertext is an opaque deployment artifact, not a useful line-by-line review.
+pages/data.enc.json binary
+# Keep upstream vendor bytes/licenses intact; review their pinned provenance instead.
+pages/vendor/** linguist-vendored
+pages/vendor/*.min.js -whitespace

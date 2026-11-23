@@ -1,0 +1,82 @@
+"""Build a zero-server entrypoint and publish ONLY an already-encrypted daily source.
+
+Excel schemas must be verified before conversion; this does not guess workbook columns.
+"""
+import argparse
+import base64
+import hashlib
+import json
+import os
+import re
+import zipfile
+from datetime import datetime,timezone
+from pathlib import Path
+
+ROOT=Path(__file__).resolve().parent.parent
+MODULES=['__init__.py','analytics.py','exports.py','browser_api.py']
+
+
+def engine(root=ROOT):
+    path=root/'pages/engine.zip'
+    with zipfile.ZipFile(path,'w',zipfile.ZIP_DEFLATED) as archive:
+        for name in MODULES:
+            entry=zipfile.ZipInfo('backend/'+name,date_time=(2026,1,1,0,0,0))
+            entry.compress_type=zipfile.ZIP_DEFLATED
+            archive.writestr(entry,(ROOT/'backend'/name).read_bytes())
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def validate(envelope):
+    if not isinstance(envelope,dict) or set(envelope)-{'u','i','c','v'} or not {'u','i','c'}<=envelope.keys() or not isinstance(envelope['u'],dict) or not envelope['u']:
+        raise ValueError('Only the existing encrypted envelope is publishable; plaintext is forbidden')
+    if 'v' in envelope and (type(envelope['v']) is not int or envelope['v']!=2):
+        raise ValueError('Unsupported envelope version; never put plaintext in public envelope fields')
+    for value in [envelope['i'],envelope['c']]: base64.b64decode(value,validate=True)
+    if len(base64.b64decode(envelope['i']))!=12 or len(base64.b64decode(envelope['c']))<16: raise ValueError('Invalid encrypted payload')
+    for account,wrapped in envelope['u'].items():
+        if not re.fullmatch('[0-9a-f]{16}',account) or set(wrapped)!={'r','s','i','k'} or wrapped['r'] not in ('a','g'):
+            raise ValueError('Invalid encrypted account wrapper')
+        for key in ['s','i','k']: base64.b64decode(wrapped[key],validate=True)
+        if len(base64.b64decode(wrapped['i']))!=12 or len(base64.b64decode(wrapped['s']))<16 or len(base64.b64decode(wrapped['k']))!=48: raise ValueError('Invalid wrapped key')
+
+
+def build(source=None,owner=None,root=ROOT):
+    asset=root/'pages/data.enc.json';manifest_path=root/'pages/data-manifest.json'
+    previous=json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+    if source is not None:
+        envelope=json.loads(Path(source).read_text())
+        validate(envelope)
+        raw=(json.dumps(envelope,separators=(',',':'))+'\n').encode()
+    else:
+        raw=asset.read_bytes();validate(json.loads(raw))
+    fingerprint=hashlib.sha256(raw).hexdigest()
+    manifest={'version':1,'fingerprint':fingerprint,'engine':engine(root),'worker':hashlib.sha256((ROOT/'pages/analysis-worker.js').read_bytes()).hexdigest(),'pdf':hashlib.sha256((ROOT/'pages/pdf.js').read_bytes()).hexdigest(),'published_at':previous.get('published_at') if previous.get('fingerprint')==fingerprint else datetime.now(timezone.utc).isoformat(timespec='seconds'),'ledger_salt':previous.get('ledger_salt') or base64.b64encode(os.urandom(16)).decode(),'owner':owner if owner is not None else previous.get('owner','')}
+    template=(ROOT/'web/index.html').read_text()
+    template=template.replace('href="styles.css"','href="web/styles.css"').replace('href="command-center.css"','href="web/command-center.css"')
+    template=template.replace('src="app.js"','src="web/app.js"').replace('src="command-center.js"','src="web/command-center.js"')
+    template=template.replace('<script src="web/app.js"','<script src="pages/browser.js"></script>\n<script src="web/app.js"')
+    note='<p class="scope-note">GitHub Pages · Data dibuka di perangkat ini. Pemegang kata sandi dapat mengakses seluruh data; peran tampilan bukan otorisasi server. Follow-up/pengaturan disimpan terenkripsi hanya pada peramban dan akun ini, tidak tersinkron ke tim. Usia kasus mengikuti jam perangkat.</p><details id="local-history-controls" hidden><summary>Cadangan riwayat lokal terenkripsi</summary><p>Unduh sebelum berganti perangkat atau kata sandi. Pulihkan hanya pada riwayat kosong; jangan hapus penyimpanan sebelum mencadangkan.</p><button id="backup-local" type="button">Unduh cadangan terenkripsi</button><label>Pulihkan cadangan <input id="restore-local" type="file" accept="application/json,.json"></label></details>'
+    note+='<details id="legacy-mapping-controls" hidden><summary>Pemetaan dari dashboard lama perlu ditinjau</summary><p>Pemetaan lama memakai nomor urut, bukan identitas surveyor. Pastikan pasangan berikut cocok dengan sumber lama sebelum mengimpor. Pemetaan terenkripsi yang sudah ada didahulukan; data sumber tidak diubah. Salinan lama baru dihapus setelah penyimpanan terenkripsi berhasil.</p><div id="legacy-mapping-preview" style="max-height:12rem;overflow:auto"></div><button id="backup-legacy-mapping" type="button">Unduh salinan lama (JSON lokal)</button><label><input id="confirm-legacy-mapping" type="checkbox"> Saya telah memverifikasi identitas dan pemetaan setiap surveyor.</label><button id="import-legacy-mapping" type="button" disabled>Impor ke riwayat terenkripsi</button><p id="legacy-mapping-status" role="status"></p></details>'
+    note=note.replace('<button id="backup-local"','<div id="history-recovery" hidden><p>Riwayat lama terkunci; laporan sementara hanya memakai data sumber. Riwayat tidak dihapus atau ditimpa. Unduh cadangan asli, atau buka dengan kata sandi lama untuk mengenkripsi ulang memakai kata sandi login sekarang.</p><label>Kata sandi lama riwayat <input id="previous-history-password" type="password" autocomplete="off"></label><button id="recover-history" type="button">Buka dan enkripsi ulang riwayat</button><p id="history-recovery-status" role="status"></p></div><button id="backup-local"')
+    template=template.replace('<main ',note+'\n<main ',1)
+    template=template.replace('Backend privat','Mode GitHub Pages').replace('Layanan privat','Dashboard terenkripsi')
+    template=template.replace('Sesi backend privat · Akses sesuai peran pengguna.','Dekripsi lokal · Pemegang kata sandi dapat mengakses seluruh data.')
+    template=template.replace('</head>','<meta name="referrer" content="no-referrer">\n<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\' \'wasm-unsafe-eval\'; worker-src \'self\'; connect-src \'self\'; style-src \'self\' \'unsafe-inline\' https://fonts.googleapis.com; font-src \'self\' https://fonts.gstatic.com; img-src \'self\' data: blob:; object-src \'none\'; base-uri \'none\'; form-action \'self\'">\n</head>')
+    # Asset versions keep a newly published shell from mixing cached code revisions.
+    for relative in ['pages/browser.js','web/app.js','web/command-center.js','web/styles.css','web/command-center.css']:
+        digest=hashlib.sha256((ROOT/relative).read_bytes()).hexdigest()[:16]
+        template=template.replace('"'+relative+'"','"'+relative+'?v='+digest+'"')
+    asset.write_bytes(raw)
+    manifest_path.write_text(json.dumps(manifest,indent=2)+'\n')
+    (root/'index.html').write_text(template)
+    (root/'.nojekyll').touch()
+    return manifest
+
+
+if __name__=='__main__':
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('source',nargs='?',type=Path,help='Validated encrypted source JSON, never a plaintext workbook/JSON')
+    parser.add_argument('--owner',help='Verified data-owner label; use SYNTHETIC TEST DATA for test fixtures')
+    args=parser.parse_args()
+    manifest=build(args.source,args.owner)
+    print('Static Pages build ready; encrypted source fingerprint:',manifest['fingerprint'])

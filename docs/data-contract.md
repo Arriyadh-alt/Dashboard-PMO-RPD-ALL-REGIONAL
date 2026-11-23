@@ -2,9 +2,18 @@
 
 ## Immutable source compatibility
 
-The input is the existing `{u,i,c}` JSON envelope. Each user entry has `{r,s,i,k}`; `r=a` is administrator and `r=g` is aggregate viewer. User lookup remains the first sixteen hex characters of SHA-256(normalized user ID); a 500,000-iteration PBKDF2-SHA-256 key unwraps the AES-GCM data key; the data key decrypts the gzip-compressed JSON. All of this now runs server-side. Changing an HTML control or a browser variable cannot change API authorization.
+The input is the existing `{u,i,c}` JSON envelope (optional `v:2`). Each user entry has `{r,s,i,k}`; `r=a` presents administrator controls and `r=g` presents aggregate views. User lookup remains the first sixteen hex characters of SHA-256(normalized user ID); a 500,000-iteration PBKDF2-SHA-256 key unwraps the AES-GCM data key; the data key decrypts the gzip-compressed JSON.
 
-The original data object contains `months`, `abs`, `reg`, `kels`, `svs`, `st`, `kl`, `A`, `S`, `E`, `P`, `W`, `meta`, `dic`, `rec`, and optionally `pdf`. The source is held privately; bootstrap has an allowlisted aggregate projection only. Guest surveyor names are pseudonymized. Source accounts/keys, record columns and legacy PDF never appear in bootstrap.
+The original data object contains `months`, `abs`, `reg`, `kels`, `svs`, `st`, `kl`, `A`, `S`, `E`, `P`, `W`, `meta`, `dic`, `rec`, and optionally `pdf`. Bootstrap has an allowlisted aggregate projection only; guest surveyor names are pseudonymized. Source accounts/keys, record columns and legacy PDF never appear in bootstrap.
+
+| Deployment | Customer access | Operational history |
+|---|---|---|
+| **Selected GitHub Pages** | Web Crypto decrypts locally; any password holder can access every customer. Roles are presentation only. | Encrypted browser/account-local events; not shared, server-enforced or tamper-proof. |
+| Optional private FastAPI | Decryption stays server-side; sessions/roles enforce API access. | Shared append-only SQLite ledger outside the public root. |
+
+Pages executes the same Python analytics and report-table code in self-hosted WebAssembly, not separate metric formulas. CSV/XLSX preserve the original definitions and formula-injection protection; browser PDFs render the same filtered report model through self-hosted jsPDF/AutoTable with plain text, wrapping and pagination. No Python image packages are shipped. All limits below also apply to Pages. Only the optional private service provides server-enforced permissions/HTTP responses.
+
+Daily publishing accepts an encrypted contract, never an unverified workbook layout. First verify the actual workbook's columns, full-snapshot/incremental meaning, source dates and master inputs. The update helper validates/prepares the contract and preserves current account wrappers while encrypting new data with a fresh IV. The publication manifest records encrypted-file publication, not a fabricated workbook refresh; no imported-at timestamp is invented for Pages. Code-only builds preserve publication time and the stable random local-history key salt. Changing account/password does not automatically migrate existing local encrypted notes/backups. See the README for the full update/backup workflow.
 
 ## Preserved legacy metrics
 
@@ -49,7 +58,7 @@ Source pending = interested rows whose original installation status is neither D
 
 Manual action status never overwrites source status. Source pending references manually marked Done/Cancel are separately identified as resolved since import and excluded from active aging. A target completion date before today on an active reference makes a follow-up overdue.
 
-Aging uses an administrator-confirmed case start date and cumulative verified paused calendar days. No start means Insufficient Data; survey/FA dates are not silently substituted. Buckets are 0–3, 4–7, 8–14, 15–30, >30 days, as of the displayed current server date. Every action preserves PIC, operational status, action, deadline, resolution notes, start/pause confirmation, timestamp and actor in an append-only SQLite ledger. API history pagination can retrieve older entries without deleting them.
+Aging uses an administrator-confirmed case start date and cumulative verified paused calendar days. No start means Insufficient Data; survey/FA dates are not silently substituted. Buckets are 0–3, 4–7, 8–14, 15–30, >30 days, as of the displayed current date: device date in Pages, server date in private mode. Every action preserves PIC, operational status, action, deadline, resolution notes, start/pause confirmation, timestamp and actor. Pages keeps these as encrypted local application history; private mode uses the append-only SQLite ledger. History pagination retrieves older entries without deleting them. Local backups restore only to empty history and are not a cross-team synchronization mechanism.
 
 ## Source quality and provenance
 
@@ -59,8 +68,8 @@ Source reconciliation counters in `meta.sync` retain their original names and me
 
 ## Exports and permissions
 
-Executive, regional, area, team and outstanding CSV/XLSX/PDF exports call the same filtered analysis as the screen. Each includes title, survey period, filters, source import/load timestamps, fingerprint, role and metric definitions. Master stock's different scope is explicit. Guest outstanding reports contain status aggregates only; case-level exports and the unfiltered legacy individual PDF require administrator authorization. The old PDF is distinctly labeled as all-surveyor/unfiltered, not presented as a filtered report.
+Executive, regional, area, team and outstanding CSV/XLSX/PDF exports call the same filtered analysis as the screen. Each includes title, survey period, filters, source import/load timestamps, fingerprint, role and metric definitions. Master stock's different scope is explicit. Guest outstanding reports present status aggregates only; case-level exports and the unfiltered legacy individual PDF are administrator controls. This is server-enforced only in private mode; Pages password holders can still decrypt all underlying data. The old PDF is distinctly labeled as all-surveyor/unfiltered, not presented as a filtered report.
 
 CSV/XLSX source strings are protected against formula execution; PDF text is escaped and long actions can span pages. Outstanding case exports retain the original source status alongside manual status, resolution notes, confirmed start/pause, active/resolved state and aging; manually closed cases are explicitly labeled, not misrepresented as active. Exports above 20,000 rows (2,000 for PDF) are refused with a narrow-filter message, never silently truncated.
 
-Saved presets bind to month labels, stable area identities and kelurahan names rather than import indices. Removed or unverifiable saved scopes require an explicit resave; they never silently widen the report. Moving an implicit lower bound into or out of the open-ended opening bucket also requires a resave, unless the preset already has an explicit start date. The backend rejects out-of-range geography with HTTP 422 consistently for analytics, exports and record search.
+Saved presets bind to month labels, stable area identities and kelurahan names rather than import indices. Removed or unverifiable saved scopes require an explicit resave; they never silently widen the report. Moving an implicit lower bound into or out of the open-ended opening bucket also requires a resave, unless the preset already has an explicit start date. The private backend rejects out-of-range geography with HTTP 422; the Pages adapter rejects it locally for analytics, exports and record search.

@@ -7,4 +7,6 @@ __pycache__/
 .private/
 *.sqlite3*
 *.enc.json
+!/pages/data.enc.json
+node_modules/
 test-results/

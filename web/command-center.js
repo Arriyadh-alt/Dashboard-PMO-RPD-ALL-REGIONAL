@@ -16,11 +16,12 @@ const scopeObject = () => Object.fromEntries(scopeKeys.map(key=>[key,S[key]]).fi
 const params = () => {const p=new URLSearchParams();for(const [key,value] of Object.entries(scopeObject())){if(key==='statuses')value.forEach(status=>p.append('status',status));else p.set(key,value)}return p};
 const notice = (message,warning=false) => `<p class="scope-note${warning?' warning':''}">${esc(message)}</p>`;
 const blank = (title,message) => `<section class="empty-state"><h2>${esc(title)}</h2><p>${esc(message)}</p></section>`;
-const skeleton = () => `<div class="skeleton" role="status" aria-label="Memuat laporan"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div><p class="mu sm">Memuat data terotorisasi…</p></div>`;
+const skeleton = () => `<div class="skeleton" role="status" aria-label="Memuat laporan"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div><p class="mu sm">${window.RPDStatic?'Memuat laporan lokal…':'Memuat data terotorisasi…'}</p></div>`;
 const option = (value,text,selected) => `<option value="${esc(value)}"${selected?' selected':''}>${esc(text)}</option>`;
 const setStatus = message => {$('#service-status').textContent=message};
 
 async function api(path, options={}) {
+  if(window.RPDStatic)return window.RPDStatic.request(path,options);
   let response;
   try {response=await fetch(path,{credentials:'same-origin',...options,headers:{...(options.body?{'Content-Type':'application/json'}:{}),...(CSRF?{'X-CSRF-Token':CSRF}:{}),...options.headers}})}
   catch {throw new Error('Backend tidak terjangkau. Periksa koneksi dan coba kembali.')}
@@ -30,6 +31,7 @@ async function api(path, options={}) {
 }
 
 async function download(path, filename) {
+  if(window.RPDStatic)return window.RPDStatic.download(path,filename);
   const response=await fetch(path,{credentials:'same-origin'});
   if(!response.ok){const error=await response.json().catch(()=>({}));if(response.status===401)localLogout();throw new Error(error.detail||'Laporan tidak tersedia.')}
   const url=URL.createObjectURL(await response.blob()), link=document.createElement('a');
@@ -41,10 +43,13 @@ function init(payload) {
   Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,coordinator:'',statuses:[],start:'',end:'',tab:'ringkasan',q:'',open:'',all:0});
   $('#lg').hidden=true;$('#app').hidden=false;$('#out').hidden=false;$('#role').textContent=ROLE==='owner'?'Administrator':'Aggregate viewer';
   $('#sub').textContent=(BOOT.data_owner?BOOT.data_owner+' · ':'')+'Kohort survei '+fd(D.meta.tmin)+' – '+fd(D.meta.tmax)+' · Metrik unik dan stok master dibedakan.';
+  if(SOURCE.history_locked)$('#sub').textContent+=' · Riwayat lokal terkunci; hanya data sumber diterapkan.';
   $('#lp').value='';$('#li').value='';fill();refresh();$('#main').focus({preventScroll:true});
+  window.RPDStatic?.ready(ROLE,BOOT);
 }
 
 function localLogout() {
+  window.RPDStatic?.stop();
   analysisRevision++;viewRevision++;searchRevision++;clearTimeout(searchTimer);
   D=REC=WM=A=QUALITY=ADMIN=null;OV={};ROLE=CSRF='';SOURCE=CAP=BOOT={};CURRENT_ROWS=[];CASE=null;PAGE=0;
   const dialog=$('#case-dialog');if(dialog?.open)dialog.close();if(dialog)dialog.remove();
@@ -52,7 +57,7 @@ function localLogout() {
 }
 
 async function go() {
-  if($('#lb').disabled)return;$('#lb').disabled=true;$('#le').textContent='Memverifikasi sesi backend…';
+  if($('#lb').disabled)return;$('#lb').disabled=true;$('#le').textContent=window.RPDStatic?'Membuka data terenkripsi di perangkat ini…':'Memverifikasi sesi backend…';
   try {await api('/api/login',{method:'POST',body:JSON.stringify({account:$('#li').value,password:$('#lp').value})});init(await api('/api/bootstrap'))}
   catch(error){$('#le').textContent=error.message;$('#lb').disabled=false}
   finally{$('#lp').value=''}
@@ -201,9 +206,9 @@ function vOutstanding() {
 }
 
 function vData() {
-  if(!CAP.customer_detail)return blank('Akses administrator diperlukan','PAM ID dan informasi pelanggan tidak dikirim ke peran aggregate viewer.');
+  if(!CAP.customer_detail)return blank('Tampilan administrator diperlukan',window.RPDStatic?'Detail disembunyikan oleh peran tampilan, bukan otorisasi server. Pemegang kata sandi tetap dapat mendekripsi seluruh data.':'PAM ID dan informasi pelanggan tidak dikirim ke peran aggregate viewer.');
   const q=S.dq,opts=(values,selected,title)=>values.map((value,index)=>option(index,index?value:title,index===selected)).join('');
-  return `<h2>Customer lookup</h2><p class="mu sm">Pencarian dilakukan di server dan mengikuti seluruh filter global. PAM ID dapat dicari dari digit awal; data sumber tidak memuat nama, alamat atau telepon pelanggan.</p><div class="fl data-filters"><input id="qp" placeholder="PAM ID" value="${esc(q.p)}" inputmode="numeric" aria-label="PAM ID"><input id="qk" placeholder="Kelurahan" value="${esc(q.k)}" aria-label="Kelurahan"><input id="qs" placeholder="Surveyor" value="${esc(q.s)}" aria-label="Surveyor"><select id="qc" aria-label="Hasil canvassing">${opts(D.dic.c1,q.c,'Semua hasil canvassing')}</select><select id="qf" aria-label="Status pemasangan">${opts(D.dic.kf,q.f,'Semua status pemasangan')}</select><select id="qr" aria-label="Status potensi">${opts(D.dic.pr,q.r,'Semua status potensi')}</select></div><div id="case-table">${skeleton()}</div>`;
+  return `<h2>Customer lookup</h2><p class="mu sm">Pencarian dilakukan ${window.RPDStatic?'lokal di perangkat ini':'di server'} dan mengikuti seluruh filter global. PAM ID dapat dicari dari digit awal; data sumber tidak memuat nama, alamat atau telepon pelanggan.</p><div class="fl data-filters"><input id="qp" placeholder="PAM ID" value="${esc(q.p)}" inputmode="numeric" aria-label="PAM ID"><input id="qk" placeholder="Kelurahan" value="${esc(q.k)}" aria-label="Kelurahan"><input id="qs" placeholder="Surveyor" value="${esc(q.s)}" aria-label="Surveyor"><select id="qc" aria-label="Hasil canvassing">${opts(D.dic.c1,q.c,'Semua hasil canvassing')}</select><select id="qf" aria-label="Status pemasangan">${opts(D.dic.kf,q.f,'Semua status pemasangan')}</select><select id="qr" aria-label="Status potensi">${opts(D.dic.pr,q.r,'Semua status potensi')}</select></div><div id="case-table">${skeleton()}</div>`;
 }
 
 async function dt() {
@@ -218,7 +223,7 @@ async function dt() {
 }
 
 function vGovernance() {
-  return `<h2>Data quality monitoring</h2><div id="quality-content">${QUALITY?qualityContent():skeleton()}</div>${ROLE==='owner'?`<section class="admin-section"><h2>Administrasi &amp; audit trail</h2><p class="mu sm">Perubahan operasional ditambahkan ke ledger privat. Tidak ada koreksi yang menghapus atau menimpa baris sumber.</p><div id="admin-content">${ADMIN?adminContent():skeleton()}</div></section>`:''}<details class="legacy-report"><summary>Catatan &amp; definisi asli sumber</summary>${notice('Catatan analisis bawaan versi sumber dipertahankan; bukan log sinkronisasi backend atau temuan baru yang sudah diverifikasi.',true)}${vCatatan()}</details>`;
+  return `<h2>Data quality monitoring</h2><div id="quality-content">${QUALITY?qualityContent():skeleton()}</div>${ROLE==='owner'?`<section class="admin-section"><h2>Administrasi &amp; ${window.RPDStatic?'riwayat lokal':'audit trail'}</h2><p class="mu sm">Perubahan operasional ditambahkan ke ${window.RPDStatic?'riwayat lokal terenkripsi pada peramban dan akun ini, tidak tersinkron ke tim dan bukan bukti audit yang tahan manipulasi':'ledger privat'}. Tidak ada koreksi yang menghapus atau menimpa baris sumber.</p><div id="admin-content">${ADMIN?adminContent():skeleton()}</div></section>`:''}<details class="legacy-report"><summary>Catatan &amp; definisi asli sumber</summary>${notice('Catatan analisis bawaan versi sumber dipertahankan; bukan log sinkronisasi backend atau temuan baru yang sudah diverifikasi.',true)}${vCatatan()}</details>`;
 }
 
 function qualityContent() {
@@ -234,7 +239,7 @@ function adminContent() {
   return `<details><summary>Target pemasangan bulanan</summary><p class="mu sm">Target hanya dibandingkan untuk bulan penuh dan cakupan yang persis sama. Input berdasarkan dokumen target yang sah.</p><form class="admin-form" id="target-form"><label class="field">Bulan<select name="month">${D.months.map(month=>option(month,month,month===D.months[S.m1])).join('')}</select></label><label class="field">Target PAM terpasang<input name="target" type="number" min="1" max="10000000" required></label><label class="field">Cakupan aktif<input value="${esc(S.ab>=0?D.abs[S.ab]:S.reg||'Seluruh regional')}" readonly></label><label class="field wide">Bukti / dokumen target<input name="evidence" maxlength="1000" required></label><button>Simpan target dengan audit</button><p class="form-status" role="status"></p></form><h2>Target aktif</h2>${dataTable(['Bulan','Regional / area','Target','Bukti'],Object.values(ADMIN.targets).map(item=>[esc(item.month),esc(item.area_name||item.region||'Seluruh regional'),N(item.target),esc(item.evidence)]))}</details>
   <details><summary>Aturan prioritas transparan</summary><form class="admin-form" id="rules-form"><label class="field">Minimum PAM unik<input name="minimum_sample" type="number" min="1" max="100000" value="${rules.minimum_sample}" required></label><label class="field">High backlog rate (0–1)<input name="high_backlog_rate" type="number" step="0.01" min="0.01" max="1" value="${rules.high_backlog_rate}" required></label><label class="field">Cooling interest rate (0–1)<input name="cooling_interest_rate" type="number" step="0.01" min="0" max="1" value="${rules.cooling_interest_rate}" required></label><button>Simpan aturan</button><p class="form-status" role="status"></p></form></details>
   <details><summary>Supply &amp; installation readiness terverifikasi</summary><form class="admin-form" id="context-form"><label class="field">Area bisnis<select name="area">${D.abs.map((name,i)=>option(i,name,i===S.ab)).join('')}</select></label><label class="field">Supply<select name="supply"><option value="unknown">Unknown</option><option value="ready">Ready</option><option value="constrained">Constrained</option></select></label><label class="field">Kesiapan pemasangan<select name="readiness"><option value="unknown">Unknown</option><option value="ready">Ready</option><option value="blocked">Blocked</option></select></label><label class="field wide">Bukti aktual / referensi<input name="evidence" maxlength="1000" required></label><button>Simpan konteks area</button><p class="form-status" role="status"></p></form><h2>Konteks area aktif</h2>${dataTable(['Area','Supply','Readiness','Bukti'],Object.entries(ADMIN.area_context).map(([key,value])=>[esc(D.abs[+key]||key),esc(value.supply),esc(value.readiness),esc(value.evidence)]))}</details>
-  <h2>Audit log · perubahan terbaru</h2>${ADMIN.events.length?ADMIN.events.map(event=>`<div class="history-entry"><strong>${esc(event.kind)} · ${esc(event.ref)}</strong><p>${esc(JSON.stringify(event.payload))}</p><small>${esc(timeLabel(event.at))} · actor ${esc(event.actor)} · event ${event.id}</small></div>`).join(''):'<p class="mu sm">Belum ada perubahan.</p>'}`;
+  <h2>${window.RPDStatic?'Riwayat lokal':'Audit log'} · perubahan terbaru</h2>${ADMIN.events.length?ADMIN.events.map(event=>`<div class="history-entry"><strong>${esc(event.kind)} · ${esc(event.ref)}</strong><p>${esc(JSON.stringify(event.payload))}</p><small>${esc(timeLabel(event.at))} · actor ${esc(event.actor)} · event ${event.id}</small></div>`).join(''):'<p class="mu sm">Belum ada perubahan.</p>'}`;
 }
 
 async function loadGovernance(revision) {
@@ -288,7 +293,7 @@ document.addEventListener('submit',async event=>{
   if(form.id==='target-form'){path='/api/admin/targets';values.target=+values.target;values.region=S.reg;values.area=S.ab}
   if(form.id==='rules-form'){path='/api/admin/rules';method='PUT';for(const key of Object.keys(values))values[key]=+values[key]}
   if(form.id==='context-form'){path='/api/admin/area-context';values.area=+values.area}
-  try {await api(path,{method,body:JSON.stringify(values)});ADMIN=null;status.textContent='Tersimpan di backend; riwayat sebelumnya tetap ada.';
+  try {await api(path,{method,body:JSON.stringify(values)});ADMIN=null;status.textContent=window.RPDStatic?'Tersimpan terenkripsi hanya di peramban dan akun ini; tidak tersinkron ke tim.':'Tersimpan di backend; riwayat sebelumnya tetap ada.';
     if(form.id==='followup-form'){if(CASE?.ref===ref){form.elements.action.value='';await loadCaseHistory(ref)}if(D)await refresh()}
     else await refresh();
   }catch(error){status.textContent=error.message}finally{button.disabled=false}
@@ -339,7 +344,7 @@ document.addEventListener('click',async event=>{
 });
 
 function setTheme(theme){document.documentElement.dataset.theme=theme;$('#thm').setAttribute('aria-label',theme==='dark'?'Aktifkan tema terang':'Aktifkan tema gelap');$('#thm').setAttribute('aria-pressed',theme==='dark')}
-try{setTheme(localStorage.getItem('rpd_theme')==='dark'?'dark':'light');localStorage.removeItem('rpd_ov')}catch{setTheme('light')}
+try{setTheme(localStorage.getItem('rpd_theme')==='dark'?'dark':'light');if(!window.RPDStatic)localStorage.removeItem('rpd_ov')}catch{setTheme('light')}
 $('#thm').onclick=()=>{const theme=document.documentElement.dataset.theme==='dark'?'light':'dark';setTheme(theme);try{localStorage.setItem('rpd_theme',theme)}catch{}};
 $('#login-form').onsubmit=event=>{event.preventDefault();go()};
 $('#out').onclick=async()=>{try{await api('/api/logout',{method:'POST'})}catch{}finally{localLogout()}};
