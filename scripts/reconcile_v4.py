@@ -98,6 +98,17 @@ def reconcile(intake, data, aliases, reference=None):
         observed=Counter(row[field].isoformat() for row in prepared['rows'] if row[field])
         check(title+' dated records',sum(dates.values()),sum(observed.values()))
         check(title+' daily buckets reconciled',len(dates.keys()|observed.keys()),sum(dates[k]==observed[k] for k in dates.keys()|observed.keys()))
+        check(title+' per-PAM dates',len(survey),sum(
+            row['pam'] in by_id and (row[field].isoformat() if row[field] else None)==(by_id[row['pam']][source] or None)
+            for row in prepared['rows']))
+    check('Per-PAM Q/AI membership',len(survey),sum(row['pam'] in by_id
+        and row['interest']==interested(by_id[row['pam']])
+        and row['status'].casefold()==header(by_id[row['pam']]['installation_status'])
+        for row in prepared['rows']))
+    events=Counter(row['meter_date'] for row in survey if row['meter_date'] and header(row['installation_status'])=='done')
+    observed_events=Counter(row['install_date'].isoformat() for row in prepared['rows'] if row['installed'] and row['install_date'])
+    keys=events.keys()|observed_events.keys()
+    check('Done meter daily event buckets',len(keys),sum(events[k]==observed_events[k] for k in keys))
     expected_teams, observed_teams=defaultdict(lambda:[0,0,0]),defaultdict(lambda:[0,0,0])
     for row in survey:
         value=expected_teams[aliases.get(text(row['surveyor']),text(row['surveyor']))]

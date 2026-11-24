@@ -75,6 +75,16 @@ def test_existing_private_owner_bootstrap_preserves_the_v4_field_cube(tmp_path):
         assert boot['data']['meta']['reporting_date']=='2026-11-23'
 
 
+def test_audit_rejects_date_swaps_that_preserve_global_daily_counts():
+    from scripts.reconcile_v4 import reconcile
+    baseline,intake=snapshot();aliases=bootstrap_aliases(baseline,intake)
+    data,_=convert(baseline,intake,aliases,full_snapshot=True)
+    intake['survey'][0]['meter_date'],intake['survey'][2]['meter_date']=intake['survey'][2]['meter_date'],intake['survey'][0]['meter_date']
+    result=reconcile(intake,data,aliases)
+    assert not result['passed']
+    assert any(row['metric']=='Meter per-PAM dates' and row['status']=='FAIL' for row in result['checks'])
+
+
 def test_xlsx_discovers_renamed_sheets_and_inserted_columns_and_drops_customer_notes(tmp_path):
     path=tmp_path/'Update Report RPD 23112026.xlsx'
     book=Workbook();book.remove(book.active)
