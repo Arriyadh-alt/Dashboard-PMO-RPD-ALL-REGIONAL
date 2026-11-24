@@ -36,5 +36,5 @@ def project(data, prepared=None):
         'install_days': [list(key) + [value] for key, value in sorted(installed.items())],
         'area_keys': [area_key(data, index) for index in range(len(data['abs']))],
         'coverage': [min(dates), max(dates)] if dates else [None, None],
-        'meta': {key: data['meta'].get(key) for key in ('tmin', 'tmax')},
+        'meta': {key: data['meta'][key] for key in ('tmin', 'tmax', 'reporting_date') if key in data['meta']},
     }

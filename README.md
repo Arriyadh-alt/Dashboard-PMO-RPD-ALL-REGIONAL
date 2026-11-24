@@ -2,6 +2,55 @@
 
 Five Bahasa Indonesia workspaces: **Ringkasan, Data Wilayah, Kinerja Tim, Outstanding, Cari PAM ID**, with authorized settings and advanced/original reports in Admin or expandable detail views. **Deployment stays on free GitHub Pages; no company server or paid host.**
 
+## V4 — source accuracy, not another redesign
+
+V4 keeps the five menus, existing encryption/account wrappers and Pages workflow.
+All historical **Berminat** membership comes from normalized Update column **Q**;
+V4 intake checks its PAM membership against **AO**, and checks that **AI** partitions
+that population into Done / Assign FA / Outstanding / Cancel. Cancel remains in
+historical interest, not active installation progress. Survey geography comes from
+**D/E/I**, never H (Flag Data). Installation/FA events retain **AW/AU** dates.
+
+The existing approved populations are intentionally different:
+
+| Metric | Definition |
+|---|---|
+| Total Potensi | MASTER DATA `FINAL FLAG = POTENSI` |
+| Tercanvassing | All valid unique Update PAM IDs, including `Belum Diketahui` |
+| Berminat / Terpasang | All Update Column Q Berminat / AI Done, not master-only |
+| Sisa Potensi | Eligible master stock minus **its matched** interested PAMs |
+| AP / U Potensi Reconnection | Separate original classifications, not Total/Sisa Potensi |
+| Active potential | No separately approved formula; unavailable rather than invented |
+| Outstanding | AI `Outstanding` only; Assign FA is a separate active queue |
+
+The new encrypted `G` cube reconciles all survey performance at each geography,
+including `RT/RW Belum Terpetakan`. Master RW/RT is used only when the joined
+survey/master geographic context agrees; disagreements are counted, not silently
+overwritten. `P` and legacy `W[0..7]` retain their established meanings. Remaining
+stock deducts only eligible-master interest, so it is **not** Total Potensi minus
+all historical Berminat outside that population. Field counts cover all periods;
+the caption distinguishes them from date-filtered survey reports.
+
+`python -m scripts.workbook_intake INPUT.xlsx PRIVATE_INTAKE.json` now defaults to
+V4 and also accepts `.xlsb`. Sheets are discovered by header signatures, not date
+suffixes. Header positions are audited; inserted columns are mapped by header.
+`--legacy-layout` reproduces old intake for audits only; V4 sources reject that
+layout on subsequent refresh. Continue with `scripts.workbook_contract` using the
+authorized encrypted source, reviewed private roster aliases and `--full-snapshot`,
+then `scripts.publish_v3` and `scripts.build_pages --bundle-dir` as below. All
+plaintext remains outside this checkout. Invalid IDs, ambiguous duplicates,
+inconsistent interest/status membership and unreconciled field cubes stop the
+release; existing published files remain unchanged until an authorized PR merges.
+The original textual PAM display is retained separately from its normalized key.
+Customer admin-note/reason text is reduced to presence flags, not republished.
+
+Public retains only the approved aggregate schema, with an optional report date
+separate from actual survey-through date. Guest/Admin share the same validated
+source/cubes; protected `G`, record dictionaries and issue categories remain
+encrypted. Outstanding tables/exports use the same AI-only population; supporting
+issue categories can overlap and must not be added together. `Case Closed` is
+displayed as its original category, never labelled unresolved illegal.
+
 ## GitHub Pages — selected deployment
 
 Keep the existing Pages configuration: **main branch, root `/`**. Merging publishes the updated dashboard. Relative asset paths and `.nojekyll` preserve repository hosting and local runtime assets. Nothing is provisioned.

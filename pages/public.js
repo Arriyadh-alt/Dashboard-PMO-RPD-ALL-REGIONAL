@@ -12,7 +12,7 @@
   let snapshot=null,sort='name',descending=false,query='';
   const exact=(object,keys)=>object&&typeof object==='object'&&!Array.isArray(object)&&Object.keys(object).length===keys.length&&keys.every(key=>Object.hasOwn(object,key));
   function approved(data){
-    if(!exact(data,['public_version','snapshot_pair','survey_through','metrics','regions','trends'])||data.public_version!==1||!exact(data.metrics,metrics)||!Array.isArray(data.regions)||!Array.isArray(data.trends))return false;
+    if(!exact(data,['public_version','snapshot_pair','survey_through','metrics','regions','trends',...(Object.hasOwn(data||{},'reporting_date')?['reporting_date']:[])])||(data.reporting_date&&!/^\d{4}-\d{2}-\d{2}$/.test(data.reporting_date))||data.public_version!==1||!exact(data.metrics,metrics)||!Array.isArray(data.regions)||!Array.isArray(data.trends))return false;
     const counts=(object,keys)=>keys.every(key=>Number.isSafeInteger(object[key])&&object[key]>=0);
     return counts(data.metrics,metrics)&&data.regions.every(row=>exact(row,['name',...metrics])&&typeof row.name==='string'&&counts(row,metrics))&&
       data.trends.every(row=>exact(row,['month','canvassed','interested','installation_events'])&&/^\d{4}-\d{2}$/.test(row.month)&&counts(row,['canvassed','interested','installation_events']));
@@ -51,7 +51,8 @@
         '<p class="scope-caption">Potensi dan sisa: stok master seluruh periode. Kinerja: pelanggan unik pada sumber survei.</p>'+ 
         '<div class="overview-charts" id="public-charts"><section class="panel"><h2>Tren Kinerja</h2>'+trend(data.trends)+'</section><section class="panel"><h2>Terpasang per Regional</h2>'+comparison(data.regions)+'</section></div>'+ 
         '<section class="panel public-regions"><div class="section-heading"><h2>Kinerja Regional</h2><input id="public-region-search" type="search" placeholder="Cari regional" aria-label="Cari regional"></div><div id="public-region-table">'+table()+'</div></section>';
-      document.getElementById('public-updated').textContent=data.survey_through?'Update Terakhir · Survei s.d. '+new Intl.DateTimeFormat('id-ID',{dateStyle:'medium',timeZone:'UTC'}).format(new Date(data.survey_through+'T00:00:00Z')):'';
+      const formatDate=value=>new Intl.DateTimeFormat('id-ID',{dateStyle:'medium',timeZone:'UTC'}).format(new Date(value+'T00:00:00Z'));
+      document.getElementById('public-updated').textContent=(data.reporting_date?'Laporan '+formatDate(data.reporting_date)+' · ':'')+(data.survey_through?'Survei s.d. '+formatDate(data.survey_through):'');
       requestAnimationFrame(()=>performance.mark('rpd:public-usable'));
     }catch{
       snapshot=null;document.getElementById('public-updated').textContent='';

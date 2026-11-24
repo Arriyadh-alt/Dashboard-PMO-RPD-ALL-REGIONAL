@@ -231,8 +231,12 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
     def bootstrap(session=Depends(authenticated)):
         source = session.data["source"]
         safe = {key: source[key] for key in ("months", "abs", "reg", "kels", "svs", "st", "kl", "A", "S", "E", "P", "W", "dic")}
+        if session.role == 'owner' and 'G' in source:
+            safe['G'] = source['G']
         safe["meta"] = {key: source["meta"].get(key, [] if key == "korlaps" else {} if key == "sync" else 0)
                         for key in ("tmin", "tmax", "rows", "uniq", "sync", "korlaps", "rt_bad")}
+        if source['meta'].get('reporting_date'):
+            safe['meta']['reporting_date'] = source['meta']['reporting_date']
         if session.role != "owner":
             safe["svs"] = [f"Surveyor {index + 1}" for index in range(len(source["svs"]))]
         mapping_events=store.history('mapping','all',limit=1)

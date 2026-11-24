@@ -122,22 +122,22 @@ def test_lookup_filters_paginate_and_preserve_operational_fields(signed):
 
 def test_followups_append_history_and_aging_uses_confirmed_case_start(signed, app):
     client, _ = signed()
-    row = client.post("/api/records/search",json={"pam":"10000006"}).json()["rows"][0]
+    row = client.post("/api/records/search",json={"pam":"10000005"}).json()["rows"][0]
     ref = row["ref"]
-    before = client.get("/api/analysis?m0=2&m1=2").json()["outstanding"]
+    before = client.get("/api/analysis?m0=1&m1=1").json()["outstanding"]
     assert before["aging"][">30"] == 0
     payload = {"pic":"Fixture PIC", "status":"Assign FA", "action":"Confirm source case start", "target_date":(date.today()-timedelta(days=1)).isoformat(),
                "case_started":(date.today()-timedelta(days=20)).isoformat(), "pause_days":5, "pause_reason":"Confirmed operational pause"}
     assert client.post(f"/api/followups/{ref}",json=payload).status_code == 200
-    current = client.get("/api/analysis?m0=2&m1=2").json()["outstanding"]
+    current = client.get("/api/analysis?m0=1&m1=1").json()["outstanding"]
     assert current["aging"]["15–30"] == 1 and current["urgent_count"] == 1
     payload.update(status="Done", action="Confirmed resolution", resolution_notes="Fixture resolution")
     assert client.post(f"/api/followups/{ref}",json=payload).status_code == 200
     history = client.get(f"/api/followups/{ref}").json()["events"]
     assert len(history) == 2 and history[0]["payload"]["status"] == "Done" and history[1]["payload"]["status"] == "Assign FA"
-    assert client.get("/api/analysis?m0=2&m1=2").json()["outstanding"]["manually_resolved"] == 1
+    assert client.get("/api/analysis?m0=1&m1=1").json()["outstanding"]["manually_resolved"] == 1
     # Source status and rows were not rewritten by the follow-up workflow.
-    assert client.post("/api/records/search",json={"pam":"10000006"}).json()["rows"][0]["status"] == "Assign FA"
+    assert client.post("/api/records/search",json={"pam":"10000005"}).json()["rows"][0]["status"] == "Outstanding"
     with app.state.store.connect() as db:
         with pytest.raises(sqlite3.IntegrityError):
             db.execute("UPDATE events SET payload='{}' WHERE kind='followup'")

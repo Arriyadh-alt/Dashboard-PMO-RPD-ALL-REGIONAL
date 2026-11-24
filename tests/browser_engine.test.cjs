@@ -9,6 +9,10 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),asse
  py.globals.set('_fixture',fixture);
  const metrics=JSON.parse(py.runPython(`import sys,json\nsys.path.insert(0,'/rpd')\nfrom backend.browser_api import BrowserAPI\napi=BrowserAPI(json.loads(_fixture),'owner','synthetic',{'fingerprint':'synthetic','loaded_at':'2026-11-23T00:00:00Z'})\njson.dumps(api.request('/api/analysis')['metrics'])`));
  assert.equal(metrics.canvassed,9);assert.equal(metrics.interested,6);assert.equal(metrics.installed,3);
+ const outstanding=JSON.parse(py.runPython("json.dumps(api.request('/api/analysis')['outstanding'])"));
+ assert.equal(outstanding.survey_rows,1);
+ const cases=JSON.parse(py.runPython("json.dumps(api.request('/api/records/search','POST',{'outstanding_only':True}))"));
+ assert.equal(cases.total,1);assert.ok(cases.rows.every(row=>row.status==='Outstanding'));
  const filtered=JSON.parse(py.runPython(`json.dumps(api.request('/api/analysis?reg=Barat')['metrics'])`));
  assert.equal(filtered.canvassed,6);assert.equal(filtered.interested,4);assert.equal(filtered.installed,2);
  await py.loadPackage(['micropip']);

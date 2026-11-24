@@ -86,6 +86,8 @@ class BrowserAPI:
     def bootstrap(self):
         source=self.data
         safe={key:source[key] for key in ('months','abs','reg','kels','svs','st','kl','A','S','E','P','W','dic')}
+        if 'G' in source:
+            safe['G'] = source['G']
         safe['meta']={key:source['meta'].get(key,[] if key=='korlaps' else {} if key=='sync' else 0) for key in ('tmin','tmax','rows','uniq','sync','korlaps','rt_bad')}
         if self.role!='owner' and not self.operational_guest:
             safe['svs']=[f'Surveyor {index+1}' for index in range(len(source['svs']))]

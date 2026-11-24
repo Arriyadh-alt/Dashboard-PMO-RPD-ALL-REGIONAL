@@ -45,7 +45,7 @@ function init(payload) {
   Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,rw:-1,rt:-1,coordinator:'',statuses:[],start:'',end:'',tab:'ringkasan',q:'',open:'',all:0,advanced:false});
   window.RPDPublic?.hide();
   $('#lg').hidden=true;$('#app').hidden=false;$('#out').hidden=false;$('#role').textContent=ROLE==='owner'?'Admin':'Guest';
-  $('#sub').textContent='Tanggal survei: '+fd(D.meta.tmin)+' – '+fd(D.meta.tmax);
+  $('#sub').textContent=(D.meta.reporting_date?'Laporan '+fd(D.meta.reporting_date)+' · ':'')+'Tanggal survei: '+fd(D.meta.tmin)+' – '+fd(D.meta.tmax);
   $('#tab-catatan').hidden=ROLE!=='owner';document.querySelector('.export-menu').hidden=!CAP.customer_detail;
   for(const tab of ['korlap','outstanding','data'])$('#tab-'+tab).hidden=!CAP.customer_detail;
   try{const saved=JSON.parse(sessionStorage.getItem('rpd_session_scope')||'null'),scope=resolvePreset(saved);if(scope)Object.assign(S,scope)}catch{}
@@ -232,15 +232,15 @@ function selectPotentialScope(key,value){
 }
 
 function potentialView(){
-  const parent=D.W.filter(row=>RPDPotential.inArea(D,S,row)),rws=[...new Set(parent.map(row=>row[2]))].sort((a,b)=>a-b);
+  const parent=RPDPotential.allRows(D).filter(row=>RPDPotential.inArea(D,S,row)),rws=[...new Set(parent.map(row=>row[2]))].sort((a,b)=>a-b);
   if(S.kel<0||!rws.includes(S.rw))S.rw=S.rt=-1;
   const rts=[...new Set(parent.filter(row=>row[2]===S.rw).map(row=>row[3]))].sort((a,b)=>a-b);
   if(S.rw<0||!rts.includes(S.rt))S.rt=-1;
-  const neighborhood=(kind,value)=>value?kind+' '+String(value).padStart(3,'0'):kind+' tidak tercatat';
+  const neighborhood=(kind,value)=>value?kind+' '+String(value).padStart(3,'0'):'RT/RW Belum Terpetakan';
   const select=(key,label,items,selected,disabled=false)=>`<label class="field potential-${key}">${label}<input id="potential-${key}" list="potential-options-${key}" type="text" autocomplete="off" aria-label="${label} potensi" placeholder="Pilih ${label.toLowerCase()}" value="${esc(items.find(item=>item.value===selected)?.label||'')}"${disabled?' disabled':''}><datalist id="potential-options-${key}">${items.map(item=>`<option value="${esc(item.label)}" data-value="${esc(item.value)}"></option>`).join('')}</datalist></label>`;
   const regions=[{value:'',label:'Semua regional'},...[...new Set(D.reg)].sort().map(name=>({value:name,label:name}))],
     areas=[{value:-1,label:'Semua area bisnis'},...D.abs.flatMap((name,i)=>!S.reg||D.reg[i]===S.reg?[{value:i,label:!S.reg&&D.abs.filter(value=>value===name).length>1?name+' · '+D.reg[i]:name}]:[])],
-    kelIds=[...new Set(D.P.filter(row=>(!S.reg||D.reg[row[0]]===S.reg)&&(S.ab<0||row[0]===S.ab)).map(row=>row[1]))],
+    kelIds=[...new Set(RPDPotential.allRows(D).filter(row=>(!S.reg||D.reg[row[0]]===S.reg)&&(S.ab<0||row[0]===S.ab)).map(row=>row[1]))],
     kels=[{value:-1,label:'Semua kelurahan'},...kelIds.sort((a,b)=>D.kels[a].localeCompare(D.kels[b],'id')).map(i=>({value:i,label:D.kels[i]}))],
     rwOptions=[{value:-1,label:'Semua RW'},...rws.map(value=>({value,label:neighborhood('RW',value)}))],
     rtOptions=[{value:-1,label:'Semua RT'},...rts.map(value=>({value,label:neighborhood('RT',value)}))];
@@ -256,7 +256,7 @@ function potentialView(){
     select('reg','Regional',regions,S.reg)+select('ab','Area Bisnis',areas,S.ab)+select('kel','Kelurahan',kels,S.kel,S.ab<0)+'</div></details><div class="potential-neighborhood">'+
     select('rw','RW',rwOptions,S.rw,S.kel<0)+select('rt','RT',rtOptions,S.rt,S.rw<0)+'<button id="reset-potential" type="button">Reset Filter</button></div></div>'+
     '<div class="intel-kpis potential-kpis">'+[['potential','Total Potensi'],['canvassed','Tercanvassing'],['interested','Berminat'],['installed','Terpasang'],['remaining','Sisa Potensi']].map(([key,label])=>`<article class="intel-card"><span class="metric-label">${label}</span><strong class="metric-value${totals[key]==null?' unavailable':''}">${totals[key]==null?'Belum tersedia':N(totals[key])}</strong></article>`).join('')+'</div>'+
-    '<p class="scope-caption">Tercanvassing: potensi master yang tercatat di survei. Sisa = Potensi − Berminat. Filter periode, tim dan status tidak mengubah stok ini.</p>'+
+    '<p class="scope-caption">'+(D.G?'Tercanvassing, Berminat dan Terpasang: seluruh survei, termasuk RT/RW Belum Terpetakan. Potensi: FINAL FLAG = POTENSI di master. Sisa = Potensi − Berminat yang cocok pada stok master; bukan dikurangi seluruh Berminat.':'Sumber lama: kinerja hanya pada potensi master yang cocok; belum mencakup seluruh survei. Sisa = Potensi − Berminat master.')+' Seluruh periode; filter tim/status tidak mengubah cakupan ini.</p>'+
     `<div class="potential-table">${dataTable(headers,cells,'Tidak ada potensi pada wilayah ini.')}</div></section>`;
 }
 
@@ -270,9 +270,10 @@ function vTeam() {
 
 function vOutstanding() {
   const out=A.outstanding;
-  return `<h2>Intervensi pemasangan</h2><div class="compact-stats"><div class="compact-stat"><span>Baris sumber berminat belum Done/Cancel</span><strong>${N(out.survey_rows)}</strong></div><div class="compact-stat"><span>Referensi kasus pada cakupan ini</span><strong>${N(out.case_references)}</strong></div><div class="compact-stat"><span>Aging belum terverifikasi</span><strong>${N(out.aging['Insufficient Data'])}</strong></div></div>`+
+  return `<h2>Intervensi pemasangan</h2><div class="compact-stats"><div class="compact-stat"><span>Outstanding · status sumber AI</span><strong>${N(out.survey_rows)}</strong></div><div class="compact-stat"><span>Antrean aktif · Assign FA + Outstanding</span><strong>${N(out.active_pipeline_customers)}</strong></div><div class="compact-stat"><span>Aging belum terverifikasi</span><strong>${N(out.aging['Insufficient Data'])}</strong></div></div>`+
   `<div class="intel-panels"><section class="panel"><h2>Status asli sumber</h2>${dataTable(['Konfirmasi pemasangan','Baris sumber'],Object.entries(out.by_status).map(([status,count])=>[esc(status),N(count)]))}<h2>Outstanding per regional</h2>${dataTable(['Regional','Baris sumber'],Object.entries(out.by_region).map(([region,count])=>[esc(region),N(count)]))}</section><section class="panel"><h2>Aging terverifikasi</h2>${dataTable(['Hari','Referensi kasus'],Object.entries(out.aging).map(([age,count])=>[esc(age),N(count)]))}<p class="footer-definition">Per ${esc(out.aging_as_of)}. ${esc(out.aging_rule)} Status manual tidak menimpa status sumber.</p></section></div>`+
-  notice(`Kategori PAM JAYA tetap dipakai persis seperti sumber. ${N(out.active_references)} referensi aktif, ${N(out.manually_resolved)} ditutup secara manual setelah impor, ${N(out.urgent_count)} melewati tenggat PIC. Aging hanya menghitung referensi aktif. Tanggal survei/FA tidak otomatis menjadi awal kasus; riwayat dicatat terpisah.`)+
+  '<section class="panel"><h2>Rincian dalam populasi Outstanding</h2>'+dataTable(['Flag Kendala','Jumlah'],Object.entries(out.by_obstacle||{}).map(([label,count])=>[esc(label),N(count)]))+dataTable(['Status Berkas','Jumlah'],Object.entries(out.by_file_status||{}).map(([label,count])=>[esc(label),N(count)]))+dataTable(['Flag Illegal · kategori asli','Jumlah'],Object.entries(out.by_illegal_flag||{}).map(([label,count])=>[esc(label),N(count)]))+'<p class="mu sm">Kategori dapat tumpang tindih; jangan dijumlahkan lintas tabel. Case Closed bukan illegal aktif. Catatan admin terisi: '+N(out.support_coverage?.admin_notes||0)+'; alasan tidak lengkap terisi: '+N(out.support_coverage?.incomplete_reasons||0)+'. Teks pribadi tidak dipublikasikan.</p></section>'+
+  notice(`Kategori PAM JAYA tetap dipakai persis seperti sumber. ${N(out.active_references)} referensi aktif, ${N(out.manually_resolved)} ditutup secara manual setelah impor, ${N(out.urgent_count)} melewati tenggat PIC. Aging hanya menghitung referensi aktif Outstanding. Assign FA bukan Outstanding. Tanggal survei/FA tidak otomatis menjadi awal kasus; riwayat dicatat terpisah.`)+
   (CAP.customer_detail&&out.urgent.length?`<h2>Tindak Lanjut Melewati Tenggat</h2>${dataTable(['Referensi kasus','PIC','Tenggat'],out.urgent.map(item=>[esc(item.ref),esc(item.pic),esc(item.target_date)]))}`:'')+
   (CAP.customer_detail?`<h2>Daftar Tindak Lanjut</h2><p class="mu sm">Buka referensi kasus untuk PIC, aksi, tenggat, catatan resolusi dan riwayat append-only.</p><div id="case-table">${skeleton()}</div>`:blank('Detail kasus dibatasi','Peran ini hanya mengakses ringkasan agregat. Administrator diperlukan untuk PAM ID dan pencatatan tindak lanjut.'));
 }

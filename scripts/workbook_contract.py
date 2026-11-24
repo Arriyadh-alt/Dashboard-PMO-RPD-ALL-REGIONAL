@@ -141,9 +141,15 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False, 
     if not full_snapshot:
         raise ValueError('Explicit full-snapshot confirmation is required; never append cumulative input')
     prepare(baseline)
-    if intake.get('layout_version') != 2:
+    if intake.get('layout_version') not in (2, 4):
         raise ValueError('Re-run the version 2 workbook intake for recommendation and total arrears')
-    if set(baseline['rec']) != RECORD_FIELDS:
+    from scripts.v4_metrics import EXTRA_RECORD_FIELDS, enhance, validate_intake
+    v4 = intake.get('layout_version') == 4
+    if v4:
+        validate_intake(intake)
+    elif 'G' in baseline:
+        raise ValueError('An upgraded V4 source requires V4 intake; never retain a stale geographic cube')
+    if set(baseline['rec']) - EXTRA_RECORD_FIELDS != RECORD_FIELDS:
         raise ValueError('Unreviewed baseline record columns; do not silently discard them')
     old_ids = baseline_ids(baseline)
     old_set = set(old_ids)
@@ -230,7 +236,7 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False, 
         t = date_code(row['survey_date'], required=True)
         fa, mt = date_code(row['fa_date']), date_code(row['meter_date'])
         c1, c2, status = text(row['result']), text(row['result_detail']), text(row['installation_status'])
-        interested, uninterested = c1 == 'Berminat', c1 == 'Tidak Berminat'
+        interested, uninterested = header(row['minat'] if v4 else c1) == 'berminat', c1 == 'Tidak Berminat'
         no_building, ptd = c2 == NO_BUILDING, c2 == PTD
         unknown = not any((interested, uninterested, no_building, ptd))
         af, done, outstanding, cancel = (status == label for label in ('Assign FA', 'Done', 'Outstanding', 'Cancel'))
@@ -270,7 +276,7 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False, 
         code('mf', m['master_flag'])
         code('sc', m['customer_status'])
         row = survey.get(pam)
-        interested = bool(row and text(row['result']) == 'Berminat')
+        interested = bool(row and header(row['minat'] if v4 else row['result']) == 'berminat')
         done = bool(interested and text(row['installation_status']) == 'Done')
         potential = text(m['master_flag']) == 'POTENSI'
         sync['master_missing'] += row is None
@@ -296,7 +302,7 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False, 
                 groups[name][key][j] += value
             if name == 'W' and neighborhood_counts:
                 groups[name][key][3] += int(row is not None)
-    sync['outside'] = sum(text(r['result']) == 'Berminat' for pam, r in survey.items() if pam not in master)
+    sync['outside'] = sum(header(r['minat'] if v4 else r['result']) == 'berminat' for pam, r in survey.items() if pam not in master)
     data['rec'] = rec
     for name, width in [('A', 2), ('S', 4), ('K', 3), ('E', 2), ('P', 2), ('W', 4)]:
         if name in data or name != 'K':
@@ -304,8 +310,11 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False, 
     survey_dates = sorted(r['survey_date'] for r in survey.values())
     data['meta'].update(rows=len(survey), uniq=len(survey), tmin=survey_dates[0],
                         tmax=survey_dates[-1], rt_bad=rt_bad, sync=sync)
+    bootstrap_compatible = data == baseline
+    if v4:
+        enhance(data, intake, survey, master, ordered_ids, location, neighborhood)
     changed = data != baseline
-    if bootstrap and changed:
+    if bootstrap and changed and not (v4 and bootstrap_compatible):
         raise ValueError('Alias bootstrap requires exact record, classification and aggregate parity')
     only_neighborhood_extension = all(data.get(key) == value for key, value in baseline.items() if key != 'W') and [row[:7] for row in data['W']] == [row[:7] for row in baseline['W']]
     if changed and not only_neighborhood_extension and baseline.get('pdf'):
