@@ -23,3 +23,8 @@ html,body,button,input,select,textarea{font-family:Arial,Helvetica,sans-serif}
 @media(max-width:1100px){.intel-kpis,.quality-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.intel-panels{grid-template-columns:1fr}.advanced-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.tabs{gap:4px}.tabs button{min-width:52px;flex-shrink:0}.tabs button .nav-text{display:none}.tabs button[aria-selected=true] .nav-text{display:inline;font-size:10px}.intel-kpis{gap:9px}.intel-card{padding:13px}.metric-value{font-size:25px}.metric-label{font-size:10px}.metric-value.unavailable{font-size:14px}.command-toolbar{padding-top:12px}.export-controls{width:100%}.export-controls select{max-width:160px}.advanced-grid,.admin-form{grid-template-columns:1fr}.compact-stats{grid-template-columns:1fr 1fr}.intel-panels{margin-top:14px;gap:12px}.quality-grid{gap:8px}.admin-section{padding:15px}.scope-note{font-size:11px}.dialog-content{padding:0}.executive-list>div{gap:10px}.metric-change{min-height:36px}.preset-row>*{max-width:100%}}
 @media print{.command-toolbar,.service-status,.legacy-report,.admin-section,dialog{display:none!important}.intel-kpis{grid-template-columns:repeat(4,1fr)}.metric-definition{display:block}.intel-panels{display:block}.panel{margin-bottom:15px}.intel-card{break-inside:avoid}}
+/* Let overview charts shrink within a narrow grid track, not the document. */
+.overview-charts{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}
+.overview-charts>.panel,.overview-charts .bc{min-width:0}
+.overview-charts .bc svg{min-width:0;max-width:100%}
+@media(max-width:1100px){.overview-charts{grid-template-columns:minmax(0,1fr)}}
