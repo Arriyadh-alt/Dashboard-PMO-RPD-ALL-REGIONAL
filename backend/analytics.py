@@ -7,6 +7,7 @@ not silently resolved. Historical state snapshots are never inferred from today'
 import calendar
 import hashlib
 import re
+from decimal import Decimal, ROUND_HALF_UP
 from collections import Counter, defaultdict
 from datetime import date, timedelta
 
@@ -430,8 +431,14 @@ def search_records(data, prepared, filters, overrides, actions, body):
         view = None
         if query or sort:
             view = record_view(data, prepared, row, overrides, actions.get(row['ref']))
-            action = view['followup'] or {}
-            if query and query not in ' '.join(str(view[key] or '') for key in searchable).casefold() + ' ' + ' '.join(str(action.get(key, '')) for key in ('pic', 'status', 'target_date')).casefold(): continue
+            if query:
+                action = view['followup']
+                followup = 'Belum dicatat' if not action else f"{action.get('pic', '')} {action.get('status', '')} {action.get('target_date') or 'Tanpa tenggat'}"
+                # Match the visible Indonesian number format, not only raw JSON.
+                value = view['arrears']
+                amount = 'Data belum tersedia' if value is None else format(Decimal(str(value)).quantize(Decimal('0.001'), rounding=ROUND_HALF_UP), ',f').rstrip('0').rstrip('.').translate(str.maketrans({',': '.', '.': ','}))
+                text = ' '.join(str(view[key]) if view[key] is not None else '–' for key in searchable)
+                if query not in f'{text} {amount} {followup}'.casefold(): continue
         if sort or offset <= total < offset + limit:
             selected.append(view if view is not None else record_view(data, prepared, row, overrides, actions.get(row['ref'])))
         total += 1

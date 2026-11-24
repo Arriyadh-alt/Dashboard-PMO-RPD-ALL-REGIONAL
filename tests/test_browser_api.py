@@ -19,6 +19,7 @@ def test_case_search_and_sort_cover_all_pages_before_slicing():
     source['rec']={key:[values[0]]*120 for key,values in source['rec'].items()}
     source['rec']['pam']=list(range(10000000,10000120))
     source['rec']['tg']=list(range(120))
+    source['rec']['tg'][-1]=10000
     source['rec']['c1']=[source['dic']['c1'].index('Berminat')]*120
     pending=next(i for i,name in enumerate(source['dic']['kf']) if name and name not in ('Done','Cancel'))
     source['rec']['kf']=[pending]*120
@@ -33,9 +34,12 @@ def test_case_search_and_sort_cover_all_pages_before_slicing():
         assert result['total']==120
         ordered.extend(int(row['pam']) for row in result['rows'])
     assert ordered==list(range(10000119,9999999,-1))
-    assert app.request('/api/records/search','POST',dict(sort='arrears',descending=True,limit=1))['rows'][0]['arrears']==119
+    assert app.request('/api/records/search','POST',dict(sort='arrears',descending=True,limit=1))['rows'][0]['arrears']==10000
+    assert app.request('/api/records/search','POST',dict(query='10.000'))['total']==1
+    assert app.request('/api/records/search','POST',dict(query='Belum dicatat'))['total']==120
     app.store.append('followup',match['rows'][0]['ref'],'synthetic-actor',dict(pic='Petugas akhir',status='Proses',target_date='2026-11-30'))
     assert app.request('/api/records/search','POST',dict(query='petugas akhir'))['total']==1
+    assert app.request('/api/records/search','POST',dict(query='Belum dicatat'))['total']==119
     with pytest.raises(ValueError):app.request('/api/records/search','POST',dict(sort='not-a-column'))
 
 
