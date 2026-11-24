@@ -67,15 +67,21 @@ def prepare(data):
     count = len(rec["pam"])
     if any(len(rec[key]) != count for key in FIELDS):
         raise ValueError("Record column lengths differ")
+    for key in ('it', 'il', 'fs', 'an', 'ir', 'pd'):
+        if key in rec and (not isinstance(rec[key], list) or len(rec[key]) != count):
+            raise ValueError('Optional record column lengths differ')
+    if 'it' in rec and any(type(value) not in (int, bool) or value not in (0, 1) for value in rec['it']):
+        raise ValueError('Invalid Column Q interest flag')
     rows, locations = [], defaultdict(set)
     for i in range(count):
         row = {key: rec[key][i] for key in FIELDS}
+        row.update({key: rec[key][i] for key in ('it', 'il', 'fs', 'an', 'ir', 'pd') if key in rec})
         row.update(index=i, pam=normalize_pam(row["pam"]), date=source_date(row["t"]),
                    fa_date=source_date(row["fa"]), install_date=source_date(row["mt"]))
         row["valid_location"] = all(isinstance(row[key], int) and 0 <= row[key] < len(data[values])
                                     for key, values in (("ab", "abs"), ("kel", "kels"), ("sv", "svs")))
         row["valid"] = bool(row["pam"] and row["date"] and row["valid_location"])
-        row["interest"] = label(data, "c1", row["c1"]).strip().casefold() == "berminat"
+        row["interest"] = bool(row['it']) if 'it' in row else label(data, "c1", row["c1"]).strip().casefold() == "berminat"
         row["status"] = label(data, "kf", row["kf"]).strip() or "Tidak tercatat"
         row["installed"] = row["status"].casefold() == "done"
         row["cancelled"] = row["status"].casefold() == "cancel"
@@ -84,6 +90,36 @@ def prepare(data):
         if row["valid"]:
             locations[row["pam"]].add((row["ab"], row["kel"]))
         rows.append(row)
+    if 'G' in data:
+        # Release invariant: field performance covers ALL survey rows, while
+        # remaining stock deducts only interested members of eligible master.
+        geographic, stock, expected = defaultdict(lambda: [0]*5), defaultdict(lambda: [0,0]), defaultdict(lambda: [0]*3)
+        keys = set()
+        for group in data['G']:
+            if (not isinstance(group, list) or len(group) != 9 or
+                any(type(value) is not int or value < 0 for value in group) or
+                group[0] >= len(data['abs']) or group[1] >= len(data['kels']) or
+                max(group[2:4]) > 99 or group[8] > group[4] or tuple(group[:4]) in keys):
+                raise ValueError('Invalid or duplicate V4 geographic cube')
+            keys.add(tuple(group[:4]))
+            for j, value in enumerate(group[4:]):
+                geographic[tuple(group[:2])][j] += value
+        for group in data['P']:
+            for j, value in enumerate(group[2:4]):
+                stock[tuple(group[:2])][j] += value
+        for row in rows:
+            if not row['valid']:
+                raise ValueError('V4 publication requires valid survey rows')
+            values = expected[row['ab'], row['kel']]
+            values[0] += 1
+            values[1] += row['interest']
+            values[2] += row['installed']
+            if 'pd' in row and normalize_pam(row['pd']) != row['pam']:
+                raise ValueError('Original PAM display does not match its normalized identity')
+        for key in geographic.keys() | expected.keys() | stock.keys():
+            values = geographic[key]
+            if values[1:4] != expected[key] or [values[0], values[4]] != stock[key]:
+                raise ValueError('V4 geographic totals do not reconcile with survey/master populations')
     # A PAM ID mapped to several geographies is not assigned arbitrarily to a region.
     ambiguous = {pam for pam, places in locations.items() if len(places) > 1}
     defaults = {}
@@ -328,7 +364,7 @@ def build_analysis(data, prepared, filters, store, role):
         trend_series[granularity] = [{"month": key, **cohort(status_scope(grouped.get(key, []),filters.get('statuses',[])), prepared["ambiguous"]),
                                       "installation_events": len(installed_events.get(key, set()))}
                                      for key in sorted(set(grouped) | set(installed_events))]
-    pending = [row for row in rows if row["interest"] and not row["installed"] and not row["cancelled"]]
+    pending = [row for row in rows if row['status'].casefold() == 'outstanding']
     latest_actions = store.latest("followup")
     aging = Counter({key: 0 for key in ("0–3", "4–7", "8–14", "15–30", ">30", "Insufficient Data")})
     unique_pending = {row["ref"]: row for row in pending}
@@ -363,6 +399,12 @@ def build_analysis(data, prepared, filters, store, role):
             "regions": regions, "areas": areas, "teams": teams, "trends": timeline, "trend_series": trend_series,
             "target": target, "insights": insights, "rules": rules,
             "outstanding": {"survey_rows": len(pending), "case_references": len(unique_pending),
+                            "active_pipeline_customers": metrics['pending_customers'],
+                            "by_obstacle": dict(Counter(label(data, 'kd', row['kd']) or 'Tidak tercatat' for row in pending)),
+                            "by_file_status": dict(Counter(label(data, 'fs', row.get('fs')) or 'Tidak tercatat' for row in pending)),
+                            "by_illegal_flag": dict(Counter(label(data, 'il', row.get('il')) or 'Tidak tercatat' for row in pending)),
+                            "support_coverage": {'admin_notes': sum(bool(row.get('an')) for row in pending),
+                                'incomplete_reasons': sum(bool(row.get('ir')) for row in pending)},
                             "manually_resolved": resolved_manually, "active_references": len(unique_pending) - resolved_manually,
                             "urgent_count": len(urgent), "urgent": urgent if role == "owner" else [],
                             "by_status": dict(Counter(row["status"] for row in pending)),
@@ -399,7 +441,7 @@ def target_analysis(data, prepared, filters, store, overrides):
 
 def record_view(data, prepared, row, overrides, action=None):
     width = 8 if data["reg"][row["ab"]] in ("Timur", "Utara") else 9
-    return {"ref": row["ref"], "pam": row["pam"].zfill(width), "survey_date": row["date"].isoformat(),
+    return {"ref": row["ref"], "pam": row.get('pd') or row["pam"].zfill(width), "survey_date": row["date"].isoformat(),
             "regional": data["reg"][row["ab"]], "area": data["abs"][row["ab"]], "kelurahan": data["kels"][row["kel"]],
             "surveyor": data["svs"][row["sv"]], "coordinator": coordinator(data, prepared, row, overrides),
             "canvassing": label(data, "c1", row["c1"]), "status": row["status"],
@@ -427,7 +469,7 @@ def search_records(data, prepared, filters, overrides, actions, body):
         if body.get('kelurahan') and body['kelurahan'].casefold() not in data['kels'][row['kel']].casefold(): continue
         if body.get('surveyor') and body['surveyor'].casefold() not in data['svs'][row['sv']].casefold(): continue
         if any(body.get(field) and row[key] != body[field] for field, key in [('canvassing', 'c1'), ('installation', 'kf'), ('potential', 'pr')]): continue
-        if body.get('outstanding_only') and not (row['interest'] and not row['installed'] and not row['cancelled']): continue
+        if body.get('outstanding_only') and row['status'].casefold() != 'outstanding': continue
         view = None
         if query or sort:
             view = record_view(data, prepared, row, overrides, actions.get(row['ref']))

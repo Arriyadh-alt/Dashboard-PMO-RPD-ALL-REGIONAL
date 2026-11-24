@@ -44,7 +44,7 @@ def report_table(kind, analysis, data, prepared, filters, store, role):
     selected = scoped_rows(data, prepared, filters, overrides)
     rows = []
     for row in selected:
-        if row["interest"] and not row["installed"] and not row["cancelled"]:
+        if row['status'].casefold() == 'outstanding':
             entry = record_view(data, prepared, row, overrides, actions.get(row["ref"]))
             action = entry["followup"] or {}
             rows.append([entry["ref"], entry["pam"], entry["regional"], entry["area"], entry["status"],

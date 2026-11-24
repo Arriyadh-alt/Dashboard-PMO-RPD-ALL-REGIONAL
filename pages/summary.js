@@ -67,7 +67,7 @@
   }
   function bootstrap(summary,source,role,info,events=[]){
     const latest=events.filter(e=>e.kind==='mapping'&&e.ref==='all').at(-1),values=latest?.payload||{};
-    const data=source?Object.fromEntries(['months','abs','reg','kels','svs','st','kl','A','S','E','P','W','dic'].map(k=>[k,source[k]])):{months:summary.months,abs:summary.abs,reg:summary.reg,kels:summary.kels,P:summary.P,svs:[],st:[],kl:[],A:[],S:[],E:[],W:[],dic:{kf:[]}};
+    const data=source?Object.fromEntries(['months','abs','reg','kels','svs','st','kl','A','S','E','P','W','G','dic'].filter(k=>k in source).map(k=>[k,source[k]])):{months:summary.months,abs:summary.abs,reg:summary.reg,kels:summary.kels,P:summary.P,svs:[],st:[],kl:[],A:[],S:[],E:[],W:[],dic:{kf:[]}};
     data.meta=source?source.meta:{...summary.meta,rows:summary.days.reduce((a,r)=>a+r[3],0)};
     return {data,role,csrf:'',overrides:Object.fromEntries((source?.svs||[]).flatMap((n,i)=>values[n]?[[i,values[n]]]:[])),mapping_version:latest?.id||0,geography:[...new Map([...summary.days,...summary.P].map(r=>[r[0]+':'+r[1],[r[0],r[1]]])).values()],area_keys:summary.area_keys,data_owner:info.owner||'',source:info,capabilities:{customer_detail:role==='owner'||!!info.operational_access,aggregate_only:!source&&!info.operational_access,browser_only:true,details_loaded:!!source}};
   }
@@ -75,6 +75,7 @@
     if([...source.abs,...source.reg].some(v=>/[^\x00-\x7f]/.test(v)))return null;
     const fields=['pam','ab','kel','sv','mi','t','c1','kf','fa','mt','kd','mf','pr','sc','tg'],r=source.rec,n=r?.pam?.length;
     if(!Number.isInteger(n)||fields.some(k=>!Array.isArray(r[k])||r[k].length!==n))return null;
+    if(r.it&&(!Array.isArray(r.it)||r.it.length!==n||r.it.some(v=>v!==0&&v!==1&&v!==true&&v!==false)))return null;
     const sourceDate=value=>{if(!value)return null;value=Math.trunc(Number(value));const y=Math.floor(value/10000),year=y<100?2000+y:y,month=Math.floor(value/100)%100,day=value%100,str=String(year).padStart(4,'0')+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0');try{return iso(date(str))===str?str:null}catch{return null}};
     const seen=new Set(),days=new Map(),installs=new Map();let first=null,last=null;
     for(let i=0;i<n;i++){
@@ -82,13 +83,13 @@
       const survey=sourceDate(r.t[i]),area=r.ab[i],kel=r.kel[i],sv=r.sv[i];
       if(!pam||!survey||![[area,source.abs],[kel,source.kels],[sv,source.svs]].every(([k,a])=>Number.isInteger(k)&&k>=0&&k<a.length))continue;
       if(seen.has(pam))return null;seen.add(pam);
-      const interest=String(source.dic.c1[r.c1[i]]||'').trim().toLowerCase()==='berminat',status=String(source.dic.kf[r.kf[i]]||'').trim().toLowerCase(),done=status==='done',key=area+':'+kel+':'+survey;
+      const interest=r.it?!!r.it[i]:String(source.dic.c1[r.c1[i]]||'').trim().toLowerCase()==='berminat',status=String(source.dic.kf[r.kf[i]]||'').trim().toLowerCase(),done=status==='done',key=area+':'+kel+':'+survey;
       if(!days.has(key))days.set(key,[area,kel,survey,0,0,0,0]);const row=days.get(key);row[3]++;row[4]+=+interest;row[5]+=+(interest&&done);row[6]+=+(interest&&!done&&status!=='cancel');
       if(!first||survey<first)first=survey;if(!last||survey>last)last=survey;
       const installation=done&&sourceDate(r.mt[i]);if(installation){const key=area+':'+kel+':'+installation;if(!installs.has(key))installs.set(key,[area,kel,installation,0]);installs.get(key)[3]++}
     }
     const area_keys=await Promise.all(source.abs.map(async(name,i)=>{const region=source.reg[i].trim().toLowerCase(),area=name.trim().toLowerCase(),input=new TextEncoder().encode(region.length+':'+region+area);return [...new Uint8Array(await crypto.subtle.digest('SHA-256',input))].map(b=>b.toString(16).padStart(2,'0')).join('').slice(0,24)}));
-    return {aggregate_version:1,months:source.months,abs:source.abs,reg:source.reg,kels:source.kels,P:source.P,days:[...days.values()],install_days:[...installs.values()],area_keys,coverage:[first,last],meta:{tmin:source.meta.tmin,tmax:source.meta.tmax}};
+    return {aggregate_version:1,months:source.months,abs:source.abs,reg:source.reg,kels:source.kels,P:source.P,days:[...days.values()],install_days:[...installs.values()],area_keys,coverage:[first,last],meta:{tmin:source.meta.tmin,tmax:source.meta.tmax,...(source.meta.reporting_date?{reporting_date:source.meta.reporting_date}:{})}};
   }
   globalThis.RPDSummary={analyse,bootstrap,bounds,project};
 })();

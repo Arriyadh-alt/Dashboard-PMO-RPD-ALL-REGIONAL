@@ -3,14 +3,17 @@
 (() => {
   'use strict';
   const inArea=(source,scope,row)=>(!scope.reg||source.reg[row[0]]===scope.reg)&&(!(scope.ab>=0)||row[0]===scope.ab)&&(!(scope.kel>=0)||row[1]===scope.kel);
+  // V4 keeps the two populations separate: survey performance is not restricted
+  // to eligible master stock; only the final deduction is master-linked.
+  const allRows=source=>Array.isArray(source.G)?source.G.map(r=>[...r.slice(0,4),r[4],r[6],r[7],r[5],r[8]]):source.W;
   function rows(source,scope={}){
-    return source.W.filter(row=>inArea(source,scope,row)&&(!(scope.rw>=0)||row[2]===scope.rw)&&(!(scope.rt>=0)||row[3]===scope.rt));
+    return allRows(source).filter(row=>inArea(source,scope,row)&&(!(scope.rw>=0)||row[2]===scope.rw)&&(!(scope.rt>=0)||row[3]===scope.rt));
   }
   function total(selected){
     const known=selected.every(row=>Number.isInteger(row[7]));
     return selected.reduce((value,row)=>({potential:value.potential+row[4],interested:value.interested+row[5],
       installed:value.installed==null||!Number.isInteger(row[6])?null:value.installed+row[6],
-      canvassed:known?value.canvassed+row[7]:null,remaining:value.remaining+row[4]-row[5]}),
+      canvassed:known?value.canvassed+row[7]:null,remaining:value.remaining+row[4]-(row[8]??row[5])}),
       {potential:0,interested:0,installed:0,canvassed:known?0:null,remaining:0});
   }
   function groups(source,scope={}){
@@ -22,5 +25,5 @@
     }
     return {level,rows:[...map.values()].map(({rows,...group})=>({...group,...total(rows)}))};
   }
-  globalThis.RPDPotential={rows,total,groups,inArea};
+  globalThis.RPDPotential={rows,total,groups,inArea,allRows};
 })();

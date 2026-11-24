@@ -14,12 +14,15 @@ TREND = {'month', 'canvassed', 'interested', 'installation_events'}
 
 
 def validate(value):
-    if not isinstance(value, dict) or set(value) != {'public_version', 'snapshot_pair', 'survey_through', 'metrics', 'regions', 'trends'}:
+    required = {'public_version', 'snapshot_pair', 'survey_through', 'metrics', 'regions', 'trends'}
+    if not isinstance(value, dict) or not required <= set(value) or set(value) - required - {'reporting_date'}:
         raise ValueError('Public summary must contain only the approved release fields')
     if value['public_version'] != 1 or not re.fullmatch(r'[0-9a-f]{32}', value['snapshot_pair']):
         raise ValueError('Invalid public snapshot identity')
     if value['survey_through'] is not None and not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value['survey_through']):
         raise ValueError('Invalid survey coverage')
+    if 'reporting_date' in value and not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value['reporting_date']):
+        raise ValueError('Invalid report date')
 
     def metrics(row, keys):
         if not isinstance(row, dict) or set(row) != keys:
@@ -57,6 +60,7 @@ def project(data, pair, analysis=None):
     analysis = analysis or build_analysis(data, prepare(data), {}, LocalEvents(), 'owner')
     public = {
         'public_version': 1, 'snapshot_pair': pair,
+        **({'reporting_date': data['meta']['reporting_date']} if data['meta'].get('reporting_date') else {}),
         'survey_through': data['meta'].get('tmax'),
         'metrics': {**{key: analysis['metrics'][key] for key in ('canvassed', 'interested', 'installed')},
                     **{key: analysis['master'][key] for key in ('potential', 'remaining')}},
