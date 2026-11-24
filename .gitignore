@@ -10,5 +10,6 @@ __pycache__/
 *.xlsx
 *.enc.json
 !/pages/data.enc.json
+!/pages/guest.enc.json
 node_modules/
 test-results/

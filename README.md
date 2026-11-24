@@ -20,7 +20,7 @@ For subsequent daily refreshes, `scripts.update_encrypted` requires `--guest-out
 
 ### Performance evidence
 
-The unchanged real 199,659-row baseline at `88cb5f6` took **25.118 s cold / 25.094 s warm** from submit to usable overview on the session VM. Immediate feedback was **0.7 / 0.3 ms**; Python preparation was about **6 s** and first analysis **13.5–13.9 s**. These are loopback browser measurements, not claims about WAN/mobile performance. Final before/after results belong in the PR after revision validation; do not infer speed from a synthetic small fixture or report a shell-only timing as browser performance.
+The real 199,659-row baseline at `88cb5f6` took **25.118 s cold / 25.094 s warm** from submit to usable overview on the session VM. Immediate feedback was **0.7 / 0.3 ms**; Python preparation was about **6 s** and first analysis **13.5–13.9 s**. Aggregate-first browser analysis at `f72c44b` reduced bootstrap to **1.473 / 1.495 s** and usable overview to **1.549 / 1.534 s**, without changing the source records or calculations. These are loopback desktop Chrome measurements, not WAN/mobile guarantees; [the V2 PR](https://github.com/Arriyadh-alt/Dashboard-PMO-RPD-ALL-REGIONAL/pull/6) records exact-revision validation. Do not infer speed from a small synthetic fixture or report shell-only timing as browser performance.
 
 ### Follow-ups and settings are browser-local
 
