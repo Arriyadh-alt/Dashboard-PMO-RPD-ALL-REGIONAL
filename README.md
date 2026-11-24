@@ -1,14 +1,26 @@
 # PMO RPD Command Center
 
-Seven decision-support workspaces, original operational reports, unique-customer metrics, filter-aware exports and encrypted customer data. **The selected deployment is the existing free GitHub Pages site; no company server or paid host is required.**
+Five Bahasa Indonesia workspaces: **Ringkasan, Data Wilayah, Kinerja Tim, Outstanding, Cari PAM ID**, with authorized settings and advanced/original reports in Admin or expandable detail views. **Deployment stays on free GitHub Pages; no company server or paid host.**
 
 ## GitHub Pages — selected deployment
 
-Merging this change intentionally replaces the old root page with the seven-workspace command center. Keep the existing Pages configuration: **main branch, root `/`**. The site uses relative paths, so the repository URL works without a custom domain. `.nojekyll` preserves the local WebAssembly/runtime assets. No API, server, database provisioning, SaaS account or infrastructure deployment is needed.
+Keep the existing Pages configuration: **main branch, root `/`**. Merging publishes the updated dashboard. Relative asset paths and `.nojekyll` preserve repository hosting and local runtime assets. Nothing is provisioned.
 
-The existing ciphertext/account wrappers are preserved, now in `pages/data.enc.json` instead of inside HTML. Sign-in uses the same PBKDF2-500,000/SHA-256/AES-GCM/gzip contract in Web Crypto. The reviewed Python analytics run locally in a worker through self-hosted Pyodide; counts are not reimplemented with different JavaScript formulas. CSV/XLSX use the same report model; text-only PDF tables use bundled jsPDF/AutoTable with repeated headers, wrapping and pagination. Browser exports do not ship Pillow or any Python image decoder.
+Sign-in retains PBKDF2-500,000/SHA-256/AES-GCM/gzip. The initial Ringkasan and aggregate geography/time filters use identity-free additive cubes **only after proving one valid row per PAM**; JavaScript/Python parity tests cover unique metrics, stock, regions, areas, trends, dates and previous periods. Duplicate/ambiguous owner snapshots fall back to the unchanged Python analytics. Detailed team, case, diagnostics and exports load self-hosted Python/WASM only when needed. Bootstrap is no longer requested twice. CSV/XLSX/PDF retain their existing report models and calculation definitions.
 
-**Accepted access model:** encrypted data is publicly downloadable, including from Git history. Anyone with a valid password can decrypt **every customer**, even if their UI presents aggregate-only views. Presentation roles, local history and browser encryption are not server-enforced authorization. There are no HttpOnly sessions, server throttling, shared audit ledger or remote session revocation in this mode. Use a current Chrome/Edge/Firefox/Safari with Web Crypto, gzip streams and WebAssembly. Local edits require Web Locks; unsupported browsers remain report-readable. Initial loading downloads a self-hosted runtime; repeat visits reuse normal browser caches. No decrypted customer records or passwords are persisted.
+**Current access model:** Admin-only `pages/data.enc.json` has a freshly generated customer-data key. Guest-only `pages/guest.enc.json` contains counts by survey/installation date and regional/area/kelurahan, master stock, date coverage and geographic labels—**no PAM IDs, roster names, staff mappings, customer dictionaries, arrears, PDFs, operational notes or local events**. Guest credentials retain their old wrapped key, which cannot decrypt the newly protected Admin payload. Admin passwords must be provided once to rewrap the new key; no account is silently disabled. Guest can use Ringkasan and Data Wilayah only; lookup, team, outstanding details, Admin and exports are not granted.
+
+This is cryptographic separation of static data, **not backend authorization**. Hiding buttons or changing browser role flags cannot produce the Admin key. Both encrypted files are publicly downloadable. **Historical full snapshots remain in public Git history and cannot be revoked: previously authorized Guest passwords can still decrypt those older snapshots.** There are no server sessions, server throttling, shared audit ledger or remote revocation. Removing those historical copies or revoking previously obtained data is outside this change. No decrypted customer records or passwords are persisted.
+
+### One-time access migration and subsequent refreshes
+
+Run `python -m scripts.split_access OLD_ENVELOPE PRIVATE_ADMIN_OUTPUT PRIVATE_GUEST_OUTPUT` outside Git using authorized Admin credentials via secure environment bindings/prompts. Provide the second Admin through `RPD_SECOND_ADMIN_ID` / `RPD_SECOND_ADMIN_PASSWORD`. The tool refuses missing Admin credentials; `--disable-other-admins` is only for an explicitly approved account retirement. Review/decrypt both outputs and verify Guest-key failure against the Admin payload before publication. Publish the pair with `python -m scripts.build_pages PRIVATE_ADMIN_OUTPUT --guest-source PRIVATE_GUEST_OUTPUT`.
+
+For subsequent daily refreshes, `scripts.update_encrypted` requires `--guest-output PRIVATE_GUEST_OUTPUT` for a protected source. It preserves the current Admin and Guest wrappers, rebuilds the Guest projection from the same validated contract and uses fresh payload IVs. Always publish the pair together. `check_public.py` blocks production publication without separate role-specific envelopes and matching fingerprints. Plaintext contracts, keys, passwords and aliases stay outside the repository.
+
+### Performance evidence
+
+The unchanged real 199,659-row baseline at `88cb5f6` took **25.118 s cold / 25.094 s warm** from submit to usable overview on the session VM. Immediate feedback was **0.7 / 0.3 ms**; Python preparation was about **6 s** and first analysis **13.5–13.9 s**. These are loopback browser measurements, not claims about WAN/mobile performance. Final before/after results belong in the PR after revision validation; do not infer speed from a synthetic small fixture or report a shell-only timing as browser performance.
 
 ### Follow-ups and settings are browser-local
 
