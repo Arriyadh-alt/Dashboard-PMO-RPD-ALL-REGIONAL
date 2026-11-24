@@ -219,9 +219,11 @@ def read_intake(path, *, v4=False):
         for name in book.sheets if binary else book.sheetnames:
             with open_sheet(name) as sheet:
                 first = next(iter(cell_rows(sheet)), None)
-                positions = header_positions(first[1]) if first and first[0] == 0 else {}
-                for kind, signature in {'survey': ('pam', 'survey_date'), 'master': ('pam', 'rw')}.items():
-                    if all(header(columns[kind][key]) in positions for key in signature):
+                cells = first[1] if first and first[0] == 0 else {}
+                names = {header(value) for value in cells.values()}
+                for kind in columns:
+                    if all(header(label) in names for label in columns[kind].values()):
+                        positions = header_positions(cells)
                         candidates[kind].append(name)
                         position_audit[kind] = {key: positions[header(label)] + 1
                                                for key, label in columns[kind].items() if header(label) in positions}

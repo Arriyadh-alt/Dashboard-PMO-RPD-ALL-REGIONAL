@@ -86,6 +86,8 @@ def test_xlsx_discovers_renamed_sheets_and_inserted_columns_and_drops_customer_n
             admin_note='PRIVATE NOTE MUST NOT LEAVE INTAKE', incomplete_reason='PRIVATE REASON')
         sheet.append(['Inserted extra column',*columns.values()])
         sheet.append(['Ignored',*[values[key] for key in columns]])
+    book.create_sheet('Summary').append([V4_SURVEY_COLUMNS['pam'],V4_SURVEY_COLUMNS['survey_date']])
+    book.create_sheet('Notes').append(['Repeated title','Repeated title'])
     book.save(path)
     result=read_intake(path,v4=True)
     assert result['layout_version']==4 and result['reporting_date']=='2026-11-23'
