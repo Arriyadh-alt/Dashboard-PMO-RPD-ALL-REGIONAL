@@ -68,3 +68,27 @@ def test_disabling_an_admin_is_explicit_and_keeps_other_passwords(tmp_path):
     source.write_text(json.dumps(encrypted_fixture(unique_source(), {'first': ('password', 'a'), 'second': ('another-password', 'a'), 'viewer': ('guest-password', 'g')})))
     result = split(source, tmp_path / 'full.json', tmp_path / 'guest.json', [('first', 'password')], disable_other_admins=True)
     assert result['disabled_admin_accounts'] == 1
+
+
+def test_daily_publication_cannot_reuse_a_stale_guest_snapshot(tmp_path):
+    from scripts.build_pages import build
+    from scripts.update_encrypted import update
+    original=tmp_path/'old.json'
+    original.write_text(json.dumps(encrypted_fixture(unique_source(), {'admin': ('password', 'a'), 'viewer': ('guest-password', 'g')})))
+    owner,guest=tmp_path/'owner.json',tmp_path/'guest.json'
+    split(original,owner,guest,[('admin','password')])
+    root=tmp_path/'site';(root/'pages').mkdir(parents=True)
+    first=build(owner,root=root,guest_source=guest)
+    assert build(root=root)==first
+    value=unique_source();value['rec']['c1'][0]=0
+    plain=tmp_path/'daily.json';plain.write_text(json.dumps(value))
+    next_owner,next_guest=tmp_path/'next-owner.json',tmp_path/'next-guest.json'
+    update(owner,plain,next_owner,'admin','password',guest_output=next_guest)
+    saved={p:p.read_bytes() for p in (root/'pages/data.enc.json',root/'pages/guest.enc.json',root/'pages/data-manifest.json')}
+    with pytest.raises(ValueError,match='matching pair'):build(next_owner,root=root)
+    with pytest.raises(ValueError,match='matching pair'):build(next_owner,root=root,guest_source=guest)
+    assert all(p.read_bytes()==raw for p,raw in saved.items())
+    second=build(next_owner,root=root,guest_source=next_guest)
+    assert second['snapshot_pair']!=first['snapshot_pair']
+    assert second['ledger_salt']==first['ledger_salt']
+    assert second['guest_fingerprint']!=first['guest_fingerprint']

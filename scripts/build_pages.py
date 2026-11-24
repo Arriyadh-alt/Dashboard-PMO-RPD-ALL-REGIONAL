@@ -27,10 +27,12 @@ def engine(root=ROOT):
 
 
 def validate(envelope):
-    if not isinstance(envelope,dict) or set(envelope)-{'u','i','c','v'} or not {'u','i','c'}<=envelope.keys() or not isinstance(envelope['u'],dict) or not envelope['u']:
+    if not isinstance(envelope,dict) or set(envelope)-{'u','i','c','v','p'} or not {'u','i','c'}<=envelope.keys() or not isinstance(envelope['u'],dict) or not envelope['u']:
         raise ValueError('Only the existing encrypted envelope is publishable; plaintext is forbidden')
     if 'v' in envelope and (type(envelope['v']) is not int or envelope['v']!=2):
         raise ValueError('Unsupported envelope version; never put plaintext in public envelope fields')
+    if 'p' in envelope and (not isinstance(envelope['p'],str) or not re.fullmatch('[0-9a-f]{32}',envelope['p'])):
+        raise ValueError('Snapshot pairing marker must be a random 128-bit identifier')
     for value in [envelope['i'],envelope['c']]: base64.b64decode(value,validate=True)
     if len(base64.b64decode(envelope['i']))!=12 or len(base64.b64decode(envelope['c']))<16: raise ValueError('Invalid encrypted payload')
     for account,wrapped in envelope['u'].items():
@@ -57,6 +59,8 @@ def build(source=None,owner=None,root=ROOT,guest_source=None):
         guest_envelope=json.loads(Path(guest_source).read_text() if guest_source is not None else guest_asset.read_text())
         validate(guest_envelope)
         admin_envelope=json.loads(raw)
+        if not admin_envelope.get('p') or admin_envelope['p']!=guest_envelope.get('p'):
+            raise ValueError('Admin and Guest snapshots must be published as the matching pair')
         if any(w['r']!='a' for w in admin_envelope['u'].values()) or any(w['r']!='g' for w in guest_envelope['u'].values()):
             raise ValueError('Separated publication requires Admin-only full data and Guest-only aggregate data')
         if set(admin_envelope['u'])&set(guest_envelope['u']):
@@ -64,6 +68,7 @@ def build(source=None,owner=None,root=ROOT,guest_source=None):
         guest_raw=(json.dumps(guest_envelope,separators=(',',':'))+'\n').encode()
         manifest['guest_fingerprint']=hashlib.sha256(guest_raw).hexdigest()
         manifest['accounts']={**admin_envelope['u'],**guest_envelope['u']}
+        manifest['snapshot_pair']=admin_envelope['p']
         guest_asset.write_bytes(guest_raw)
     template=(ROOT/'web/index.html').read_text()
     template=template.replace('href="styles.css"','href="web/styles.css"').replace('href="command-center.css"','href="web/command-center.css"')

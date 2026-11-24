@@ -63,6 +63,7 @@ validate(json.loads(guest))
 assert all(w['r']=='g' for w in json.loads(guest)['u'].values())
 assert hashlib.sha256(guest).hexdigest()==manifest['guest_fingerprint']
 assert manifest['accounts']=={**json.loads(encrypted)['u'],**json.loads(guest)['u']}
+assert manifest['snapshot_pair']==json.loads(encrypted)['p']==json.loads(guest)['p'], 'Guest and Admin must describe the same snapshot'
 for relative,info in json.loads((REPO/'pages/vendor/manifest.json').read_text())['files'].items():
     assert hashlib.sha256((REPO/'pages/vendor'/relative).read_bytes()).hexdigest()==info['sha256'], 'Vendored dependency changed: '+relative
 print('Public checks passed: five menus, Admin tools, separate encrypted capabilities and pinned local runtime verified.')

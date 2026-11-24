@@ -25,10 +25,11 @@ def encoded(value):
     return base64.b64encode(value).decode()
 
 
-def encrypt(data, key, wrappers):
+def encrypt(data, key, wrappers, pair=None):
     iv = os.urandom(12)
     packed = gzip.compress(json.dumps(data, ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode())
     envelope = {'v': 2, 'u': wrappers, 'i': encoded(iv), 'c': encoded(AESGCM(key).encrypt(iv, packed, None))}
+    if pair is not None: envelope['p'] = pair
     validate(envelope)
     return envelope
 
@@ -73,8 +74,11 @@ def split(source, owner_output, guest_output, credentials, disable_other_admins=
         wrappers[identity] = wrapped
     # Kept only inside the newly protected Admin plaintext, never in bootstrap.
     data['_guest_access'] = {'key': encoded(old_key), 'wrappers': guests}
-    owner = encrypt(data, new_key, wrappers)
-    guest = encrypt(aggregate, old_key, guests)
+    pair = os.urandom(16).hex()
+    owner = encrypt(data, new_key, wrappers, pair)
+    guest = encrypt(aggregate, old_key, guests, pair)
+    if Path(owner_output).resolve() == Path(guest_output).resolve():
+        raise ValueError('Admin and Guest output paths must differ')
     for path in (owner_output, guest_output):
         resolved = Path(path).resolve()
         if resolved == ROOT or ROOT in resolved.parents or resolved.exists():

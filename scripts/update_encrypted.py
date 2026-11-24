@@ -32,13 +32,15 @@ def update(source,plaintext,output,account,password,guest_output=None):
     data=json.loads(plaintext.read_text())
     previous=json.loads(gzip.decompress(AESGCM(key).decrypt(base64.b64decode(envelope['i']),base64.b64decode(envelope['c']),None)))
     access=previous.get('_guest_access')
-    guest=None
+    guest=None;pair=None
     if access:
         if guest_output is None: raise ValueError('A paired Guest output is required for this protected source')
         guest_path=Path(guest_output).resolve()
         if guest_path==ROOT or ROOT in guest_path.parents or guest_path.exists(): raise ValueError('Choose a new Guest output outside the repository')
+        if guest_path==output: raise ValueError('Admin and Guest output paths must differ')
         data['_guest_access']=access
-        guest=encrypt(project(data),base64.b64decode(access['key']),access['wrappers'])
+        pair=os.urandom(16).hex()
+        guest=encrypt(project(data),base64.b64decode(access['key']),access['wrappers'],pair)
     else:
         data.pop('_guest_access',None)
     prepared=prepare(data)
@@ -46,6 +48,7 @@ def update(source,plaintext,output,account,password,guest_output=None):
     packed=gzip.compress(json.dumps(data,ensure_ascii=False,allow_nan=False).encode())
     iv=os.urandom(12)
     encrypted={**envelope,'i':base64.b64encode(iv).decode(),'c':base64.b64encode(AESGCM(key).encrypt(iv,packed,None)).decode()}
+    if pair is not None: encrypted['p']=pair
     validate(encrypted)
     output.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
     descriptor=os.open(output,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
