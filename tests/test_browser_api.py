@@ -14,6 +14,31 @@ def browser(role='owner'):
     return BrowserAPI(fixture_data(),role,'synthetic-actor',{'fingerprint':'synthetic','loaded_at':'2026-11-23T00:00:00+00:00'})
 
 
+def test_case_search_and_sort_cover_all_pages_before_slicing():
+    source=fixture_data()
+    source['rec']={key:[values[0]]*120 for key,values in source['rec'].items()}
+    source['rec']['pam']=list(range(10000000,10000120))
+    source['rec']['tg']=list(range(120))
+    source['rec']['c1']=[source['dic']['c1'].index('Berminat')]*120
+    pending=next(i for i,name in enumerate(source['dic']['kf']) if name and name not in ('Done','Cancel'))
+    source['rec']['kf']=[pending]*120
+    app=BrowserAPI(source,'owner','synthetic-actor',{})
+    first=app.request('/api/records/search','POST',dict(limit=50))
+    assert first['total']==120 and len(first['rows'])==50
+    match=app.request('/api/records/search','POST',dict(query='10000119',outstanding_only=True))
+    assert match['total']==1 and int(match['rows'][0]['pam'])==10000119
+    ordered=[]
+    for offset in (0,50,100):
+        result=app.request('/api/records/search','POST',dict(sort='pam',descending=True,offset=offset,limit=50))
+        assert result['total']==120
+        ordered.extend(int(row['pam']) for row in result['rows'])
+    assert ordered==list(range(10000119,9999999,-1))
+    assert app.request('/api/records/search','POST',dict(sort='arrears',descending=True,limit=1))['rows'][0]['arrears']==119
+    app.store.append('followup',match['rows'][0]['ref'],'synthetic-actor',dict(pic='Petugas akhir',status='Proses',target_date='2026-11-30'))
+    assert app.request('/api/records/search','POST',dict(query='petugas akhir'))['total']==1
+    with pytest.raises(ValueError):app.request('/api/records/search','POST',dict(sort='not-a-column'))
+
+
 @pytest.mark.parametrize('filters',[{}, {'reg':'Barat'}, {'statuses':['Done']},{'m0':1,'m1':1},{'ab':1,'kel':1}])
 def test_browser_uses_identical_reviewed_analytics(tmp_path,filters):
     app=browser()

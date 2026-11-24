@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .analytics import (DEFAULT_RULES, area_key, build_analysis, coordinator, label, matches, period_bounds,
-                        prepare, quality, record_view, scoped_rows, target_ref)
+                        prepare, quality, record_view, scoped_rows, target_ref, search_records)
 from .auth import Sessions, SessionCapacity, user_key
 from .source import RotationRequired, SourceCache
 from .exports import TITLES, make_report
@@ -64,6 +64,9 @@ class Search(StrictModel):
     outstanding_only: bool = False
     offset: int = Field(default=0, ge=0)
     limit: int = Field(default=50, ge=1, le=100)
+    query: str = Field(default='', max_length=150)
+    sort: Literal['', 'pam', 'survey_date', 'regional', 'surveyor', 'canvassing', 'status', 'fa_date', 'obstacle', 'potential_status', 'arrears', 'followup'] = ''
+    descending: bool = False
 
 
 class Followup(StrictModel):
@@ -260,18 +263,7 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
         filters = scope_dict(body.scope, session)
         overrides = store.latest("mapping").get("all", {})
         actions = store.latest("followup")
-        selected, total = [], 0
-        for row in scoped_rows(source, prepared, filters, overrides):
-            if (body.pam and not row["pam"].startswith(body.pam.strip().lstrip("0"))) or (body.kelurahan and body.kelurahan.casefold() not in source["kels"][row["kel"]].casefold()) or (body.surveyor and body.surveyor.casefold() not in source["svs"][row["sv"]].casefold()):
-                continue
-            if any(value and row[key] != value for key, value in (("c1", body.canvassing), ("kf", body.installation), ("pr", body.potential))):
-                continue
-            if body.outstanding_only and not (row["interest"] and not row["installed"] and not row["cancelled"]):
-                continue
-            if body.offset <= total < body.offset + body.limit:
-                selected.append(record_view(source, prepared, row, overrides, actions.get(row["ref"])))
-            total += 1
-        return {"rows": selected, "total": total, "offset": body.offset, "limit": body.limit}
+        return search_records(source, prepared, filters, overrides, actions, body.model_dump())
 
     def known_case(ref, session):
         if not any(row["valid"] and row["ref"] == ref for row in session.data["prepared"]["rows"]):

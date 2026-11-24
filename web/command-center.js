@@ -4,6 +4,8 @@ let analysisRevision = 0, viewRevision = 0, searchRevision = 0, searchTimer, PAG
 let CURRENT_ROWS = [], CASE = null, caseReturnFocus = null, regionSort = 'installation_rate', trendUnit = 'monthly';
 let renderedTab='';const legacyPanels=new Map();
 let gridSequence=0;const grids=new Map(),gridStates=new Map();
+let caseQuery='',caseSort='',caseDescending=false;
+const caseSorts=['pam','survey_date','regional','surveyor','canvassing','status','fa_date','obstacle','potential_status','arrears','followup'];
 
 function rememberLegacyPanel(){if(renderedTab)document.querySelectorAll('#main .legacy-report').forEach((panel,index)=>legacyPanels.set(renderedTab+':'+(panel.id||index),panel.open))}
 const PAGE_SIZE = 50;
@@ -40,6 +42,7 @@ async function download(path, filename) {
 }
 
 function init(payload) {
+  caseQuery=caseSort='';caseDescending=false;
   BOOT=payload;D=payload.data;ROLE=payload.role;CSRF=payload.csrf;SOURCE=payload.source;CAP=payload.capabilities;OV=payload.overrides;WM=null;
   Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,coordinator:'',statuses:[],start:'',end:'',tab:'ringkasan',q:'',open:'',all:0,advanced:false});
   $('#lg').hidden=true;$('#app').hidden=false;$('#out').hidden=false;$('#role').textContent=ROLE==='owner'?'Admin':'Guest';
@@ -52,6 +55,7 @@ function init(payload) {
 }
 
 function localLogout() {
+  caseQuery=caseSort='';caseDescending=false;
   window.RPDStatic?.stop();
   analysisRevision++;viewRevision++;searchRevision++;clearTimeout(searchTimer);
   D=REC=WM=A=QUALITY=ADMIN=null;OV={};ROLE=CSRF='';SOURCE=CAP=BOOT={};CURRENT_ROWS=[];CASE=null;PAGE=0;grids.clear();gridStates.clear();legacyPanels.clear();renderedTab='';
@@ -174,7 +178,8 @@ function trendCharts() {
   return bars('PAM unik tercanvassing · tanggal survei',rows.map(row=>row.canvassed),labels)+bars('PAM unik berminat · tanggal survei',rows.map(row=>row.interested),labels)+bars('PAM unik Done · tanggal pemasangan',rows.map(row=>row.installation_events),labels);
 }
 
-function dataTable(headers,rows,empty='Tidak ada data yang cocok dengan filter.') {
+function dataTable(headers,rows,empty='Tidak ada data yang cocok dengan filter.',remote=false) {
+  if(remote)return `<div class="tw"><table class="report-table"><thead><tr>${headers.map((header,i)=>`<th scope="col" aria-sort="${caseSort===caseSorts[i]?(caseDescending?'descending':'ascending'):'none'}"><button data-case-sort="${caseSorts[i]}">${header} ${caseSort===caseSorts[i]?(caseDescending?'↓':'↑'):'↕'}</button></th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(cells=>'<tr>'+cells.map((cell,i)=>`<td${i===0?' class="text"':''}>${cell}</td>`).join('')+'</tr>').join(''):`<tr><td colspan="${headers.length}">${esc(empty)}</td></tr>`}</tbody></table></div>`;
   const id=S.tab+'-'+gridSequence++;grids.set(id,{headers,rows,empty});return `<section class="table-grid" data-grid="${id}">${gridHTML(id)}</section>`;
 }
 
@@ -227,10 +232,13 @@ async function dt() {
   if(!CAP.customer_detail||!['data','outstanding'].includes(S.tab))return;
   const revision=++searchRevision,tab=S.tab,container=$('#case-table');if(!container)return;
   const q=S.dq,body={scope:scopeObject(),pam:tab==='data'?q.p:'',kelurahan:tab==='data'?q.k:'',surveyor:tab==='data'?q.s:'',canvassing:tab==='data'?q.c:0,installation:tab==='data'?q.f:0,potential:tab==='data'?q.r:0,outstanding_only:tab==='outstanding',offset:PAGE*PAGE_SIZE,limit:PAGE_SIZE};
+  Object.assign(body,{query:caseQuery,sort:caseSort,descending:caseDescending});
   container.setAttribute('aria-busy','true');
   try {const result=await api('/api/records/search',{method:'POST',body:JSON.stringify(body)});if(revision!==searchRevision||S.tab!==tab)return;CURRENT_ROWS=result.rows;
-    container.innerHTML=`<div class="pagination"><span>${N(result.total)} baris cocok · halaman ${PAGE+1}</span><div><button id="page-prev"${PAGE===0?' disabled':''}>Sebelumnya</button> <button id="page-next"${result.offset+result.limit>=result.total?' disabled':''}>Berikutnya</button></div></div>`+
-    dataTable(['PAM ID / kasus','Tanggal survei','Regional / area / kelurahan','Surveyor / koordinator','Hasil canvassing','Status sumber','FA / pemasangan','Kendala','Flag / potensi / pelanggan','Tunggakan (Rp)','Tindak lanjut'],result.rows.map((row,index)=>[`<button data-case="${index}">${esc(row.pam)}</button><small class="mu">${esc(row.ref)}</small>`,esc(row.survey_date),`${esc(row.regional)} / ${esc(row.area)} / ${esc(row.kelurahan)}`,`${esc(row.surveyor)} / ${esc(row.coordinator)}`,esc(row.canvassing),esc(row.status),`${esc(row.fa_date||'–')} / ${esc(row.installation_date||'–')}`,esc(row.obstacle||'–'),`${esc(row.master_flag||'–')} / ${esc(row.potential_status||'–')} / ${esc(row.customer_status||'–')}`,number(row.arrears),row.followup?`${esc(row.followup.pic)}<br>${esc(row.followup.status)}<br>${esc(row.followup.target_date||'Tanpa tenggat')}`:'Belum dicatat']));
+    const focus=document.activeElement?.id==='case-search',cursor=focus?document.activeElement.selectionStart:null;
+    container.innerHTML=`<div class="table-controls"><input id="case-search" type="search" aria-label="Cari di seluruh hasil" placeholder="Cari di seluruh hasil" value="${esc(caseQuery)}"></div><div class="pagination"><span>${N(result.total)} baris cocok · halaman ${PAGE+1}</span><div><button id="page-prev"${PAGE===0?' disabled':''}>Sebelumnya</button> <button id="page-next"${result.offset+result.limit>=result.total?' disabled':''}>Berikutnya</button></div></div>`+
+    dataTable(['PAM ID / kasus','Tanggal survei','Regional / area / kelurahan','Surveyor / koordinator','Hasil canvassing','Status sumber','FA / pemasangan','Kendala','Flag / potensi / pelanggan','Tunggakan (Rp)','Tindak lanjut'],result.rows.map((row,index)=>[`<button data-case="${index}">${esc(row.pam)}</button><small class="mu">${esc(row.ref)}</small>`,esc(row.survey_date),`${esc(row.regional)} / ${esc(row.area)} / ${esc(row.kelurahan)}`,`${esc(row.surveyor)} / ${esc(row.coordinator)}`,esc(row.canvassing),esc(row.status),`${esc(row.fa_date||'–')} / ${esc(row.installation_date||'–')}`,esc(row.obstacle||'–'),`${esc(row.master_flag||'–')} / ${esc(row.potential_status||'–')} / ${esc(row.customer_status||'–')}`,number(row.arrears),row.followup?`${esc(row.followup.pic)}<br>${esc(row.followup.status)}<br>${esc(row.followup.target_date||'Tanpa tenggat')}`:'Belum dicatat']),undefined,true);
+    if(focus){const input=$('#case-search');input.focus();input.setSelectionRange(cursor,cursor)}
   }catch(error){if(revision===searchRevision)container.innerHTML=blank('Pencarian gagal',error.message)}finally{if(revision===searchRevision)container.removeAttribute('aria-busy')}
 }
 
@@ -315,6 +323,7 @@ document.addEventListener('submit',async event=>{
 
 document.addEventListener('input',event=>{
   const target=event.target;if(target.id==='filter-search'){fill();return}
+  if(target.id==='case-search'){caseQuery=target.value;PAGE=0;clearTimeout(searchTimer);searchRevision++;searchTimer=setTimeout(dt,300);return}
   if(target.dataset.gridSearch){const id=target.dataset.gridSearch,state=gridStates.get(id);state.q=target.value;state.page=0;const pos=target.selectionStart;updateGrid(id);const field=document.querySelector('[data-grid-search="'+id+'"]');field?.focus();field?.setSelectionRange(pos,pos);return}
   if(target.id==='q'){S.q=target.value;S.all=0;kt()}
   else if(['qp','qk','qs'].includes(target.id)){S.dq[{qp:'p',qk:'k',qs:'s'}[target.id]]=target.value;PAGE=0;clearTimeout(searchTimer);searchTimer=setTimeout(dt,250)}
@@ -344,6 +353,7 @@ document.addEventListener('change',async event=>{
 
 document.addEventListener('click',async event=>{
   const target=event.target.closest('button,th[data-i],tr[data-k]');if(!target)return;
+  if(target.dataset.caseSort){caseDescending=caseSort===target.dataset.caseSort?!caseDescending:false;caseSort=target.dataset.caseSort;PAGE=0;dt();return}
   if(target.dataset.gridSort){const id=target.dataset.gridSort,state=gridStates.get(id),col=+target.dataset.column;state.direction=state.col===col?-state.direction:1;state.col=col;state.page=0;updateGrid(id);return}
   if(target.dataset.gridPage){const id=target.dataset.gridPage;gridStates.get(id).page+=+target.dataset.step;updateGrid(id);return}
   const route=target.dataset.tab||target.dataset.route;
