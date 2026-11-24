@@ -120,9 +120,9 @@ class BrowserAPI:
             analysis=build_analysis(self.data,self.prepared,filters,self.store,view_role)
             info={**self.info,'imported_at':None}
             if extension=='pdf':
-                headers,rows,metadata=report_content(kind,extension,analysis,self.data,self.prepared,filters,self.store,view_role,info)
+                headers,rows,metadata=report_content(kind,extension,analysis,self.data,self.prepared,filters,self.store,view_role,info,account_role=self.role)
                 return {'pdf_model':dict(headers=headers,rows=rows,metadata=metadata)}
-            content,media=make_report(kind,extension,analysis,self.data,self.prepared,filters,self.store,view_role,info)
+            content,media=make_report(kind,extension,analysis,self.data,self.prepared,filters,self.store,view_role,info,account_role=self.role)
             return {'binary':base64.b64encode(content).decode(),'media_type':media}
         if self.role!='owner' and not self.operational_guest: raise ValueError('View unavailable in this presentation role. Browser roles are not server authorization.')
         source,prepared,store=self.data,self.prepared,self.store

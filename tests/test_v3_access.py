@@ -50,6 +50,17 @@ def test_internal_guest_reads_all_monitoring_but_no_mutations_or_admin_routes():
     assert app.store.events==[]
 
 
+def test_operational_guest_exports_show_account_role_not_internal_full_read_policy():
+    import base64
+    app=BrowserAPI(unique_source(),'guest','fixture',{'loaded_at':'2026-11-24','fingerprint':'fixture'},operational_guest=True)
+    model=app.request('/api/reports/team.pdf')['pdf_model']
+    assert 'Role: guest' in model['metadata']
+    assert 'Role: owner' not in model['metadata']
+    assert model['rows']
+    csv=base64.b64decode(app.request('/api/reports/team.csv')['binary']).decode('utf-8-sig')
+    assert 'Role: guest' in csv and 'Role: owner' not in csv
+
+
 def test_v3_publish_preserves_wrappers_and_requires_a_matching_complete_bundle(tmp_path):
     original=tmp_path/'old.json';original.write_text(json.dumps(encrypted_fixture(unique_source(),{'admin':('password','a'),'viewer':('guest-password','g')})))
     owner,guest=tmp_path/'owner.json',tmp_path/'guest.json'

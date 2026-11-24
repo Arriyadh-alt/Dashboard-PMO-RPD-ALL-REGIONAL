@@ -32,6 +32,22 @@ The real 199,659-row baseline at `88cb5f6` took **25.118 s cold / 25.094 s warm*
 
 ### Follow-ups and settings are browser-local
 
+V3 was remeasured against the retained V2 bundle on the same desktop loopback setup, using the actual production-sized dataset and both existing Admin accounts. Single cold/warm trials (milliseconds), recorded at [the validated V3 revision](https://github.com/Arriyadh-alt/Dashboard-PMO-RPD-ALL-REGIONAL/commit/bc72fd2e4fd3e220f7da688875b57b35625b25b0):
+
+| Measurement | Cold | Warm |
+|---|---:|---:|
+| Retained V2 submit → usable overview | 926.0 | 928.4 |
+| V3 submit → bootstrap | 451.6 | 396.9 |
+| V3 submit → usable painted overview | 499.9 | 447.3 |
+| V3 immediate feedback | 0.7 | 0.5 |
+| V3 Public navigation → usable | 52.0 | 26.6 |
+
+First detailed **field** navigation painted in 349.4 ms; revisiting took 63.5 ms. Login fetched the 104,203-byte encrypted overview, not the 2,281,455-byte operational payload. Key derivation was the largest measured login cost (~406/352 ms). Python-heavy reports still incur their deferred runtime startup; field timings do not certify every report, WAN or mobile speed.
+
+Synthetic Public/Guest/Admin validation covered the five field metrics, team/preset retention, read-only Guest guards, encrypted Admin local persistence and CSV/XLSX/PDF. A 400px viewport reached RT in three field selections after area context, without document overflow; selections are not individual keystrokes. Both real Admin logins reached usable owner overviews. Real Guest login and deployed-network performance remain untested; browser guards do not establish trusted server authorization. No production customer/staff screenshots or recordings were captured.
+
+### Follow-ups and settings are browser-local
+
 Follow-ups, mappings, targets and readiness/rules changes are encrypted in local browser storage under an account-derived key, separate from the daily source key. They survive reloads and daily data replacement **on that account/browser only**. They are **not shared or synchronized with teammates**, and they are not tamper-proof audit evidence. Existing metrics distinguish imported statuses from local manual changes. Aging uses the displayed device date; keep the device clock correct.
 
 Use **Cadangan riwayat lokal terenkripsi** to download an encrypted backup before clearing storage or moving devices. Restore is allowed only into empty local history for the same dashboard, account and password; it never silently replaces current history. Backups retain their original password. Credential changes require a deliberate migration of these backups using the previous credentials; simply changing the login does not re-encrypt history. Another tab changing history causes a reload/re-login warning rather than a lost update. A full/unavailable browser store refuses the write instead of claiming it was saved. Keep encrypted backups separately; browsing in private mode can discard local storage.
