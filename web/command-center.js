@@ -119,7 +119,8 @@ function fill() {
   $('#fco').innerHTML=option('','Semua koordinator / tim',!S.coordinator)+coordinators.map(name=>option(name,LB[name]||name,name===S.coordinator)).join('');
   $('#fstatus').innerHTML=D.dic.kf.filter(Boolean).map(status=>option(status,status,S.statuses.includes(status))).join('');
   $('#fstart').value=S.start;$('#fend').value=S.end;
-  $('#fperiod').value=S.start||S.end||S.m0||S.m1!==D.months.length-1?'custom':'all';
+  const day=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-'),today=new Date(),week=new Date(today),month=new Date(today);week.setDate(week.getDate()-6);month.setDate(1);
+  $('#fperiod').value=!S.start&&!S.end&&!S.m0&&S.m1===D.months.length-1?'all':S.end===day(today)&&S.start===day(today)?'today':S.end===day(today)&&S.start===day(week)?'week':S.end===day(today)&&S.start===day(month)?'month':'custom';
   const selectedPreset=$('#preset-list').value;$('#preset-list').innerHTML=option('','Pilih preset',!selectedPreset)+Object.keys(presetList()).map(name=>option(name,name,name===selectedPreset)).join('');
   const active=[];if(S.reg)active.push(S.reg);if(S.ab>=0)active.push(D.abs[S.ab]);if(S.kel>=0)active.push(D.kels[S.kel]);if(S.coordinator)active.push(S.coordinator);active.push(...S.statuses);if(S.start||S.end)active.push((S.start||'awal sumber')+' → '+(S.end||'akhir bulan'));
   $('#active-filters').innerHTML=(active.length?active:['Seluruh cakupan operasional']).map(text=>`<span class="chip">${esc(text)}</span>`).join('');
