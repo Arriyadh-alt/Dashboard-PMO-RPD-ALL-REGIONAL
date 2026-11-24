@@ -118,8 +118,17 @@ def reconcile(intake, data, aliases, reference=None):
         for i,n in enumerate((1,row['interest'],row['installed'])):value[i]+=n
     keys=expected_teams.keys()|observed_teams.keys()
     check('Surveyor groups · survey/interest/Done',len(keys),sum(expected_teams[k]==observed_teams[k] for k in keys))
-    for key,title in [('by_obstacle','Outstanding obstacle categories'),('by_file_status','Outstanding file categories'),('by_illegal_flag','Outstanding illegal categories')]:
-        check(title,expected['Outstanding'],sum(analysis['outstanding'][key].values()))
+    pending_source=[row for row in survey if header(row['installation_status'])=='outstanding']
+    for key,field,code,title in [('by_obstacle','obstacle','kd','Outstanding obstacle categories'),('by_file_status','file_status','fs','Outstanding file categories'),('by_illegal_flag','illegal_flag','il','Outstanding illegal categories')]:
+        source_buckets=Counter(text(row[field]) or 'Tidak tercatat' for row in pending_source)
+        buckets=analysis['outstanding'][key];keys=source_buckets.keys()|buckets.keys()
+        check(title,expected['Outstanding'],sum(buckets.values()))
+        check(title+' · exact buckets',len(keys),sum(source_buckets[k]==buckets.get(k,0) for k in keys))
+        check(title+' · per-PAM labels',len(pending_source),sum(row['pam'] in by_id
+            and text(data['dic'][code][row[code]])==text(by_id[row['pam']][field])
+            for row in prepared['rows'] if row['status'].casefold()=='outstanding'))
+    for field,code,title in [('admin_note_present','an','admin_notes'),('incomplete_reason_present','ir','incomplete_reasons')]:
+        check('Outstanding coverage · '+title,sum(bool(row[field]) for row in pending_source),analysis['outstanding']['support_coverage'][title])
     computed = {row['metric']:row['excel'] for row in checks}
     for key, value in (reference or {}).items():
         check('Provided reference: '+key,value,computed[key])

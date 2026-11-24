@@ -85,6 +85,16 @@ def test_audit_rejects_date_swaps_that_preserve_global_daily_counts():
     assert any(row['metric']=='Meter per-PAM dates' and row['status']=='FAIL' for row in result['checks'])
 
 
+def test_audit_rejects_a_wrong_outstanding_category_with_an_unchanged_total():
+    from scripts.reconcile_v4 import reconcile
+    baseline,intake=snapshot();aliases=bootstrap_aliases(baseline,intake)
+    data,_=convert(baseline,intake,aliases,full_snapshot=True)
+    data['dic']['fs'].append('Tidak Lengkap');data['rec']['fs'][2]=len(data['dic']['fs'])-1
+    result=reconcile(intake,data,aliases)
+    assert not result['passed']
+    assert any(row['metric']=='Outstanding file categories · exact buckets' and row['status']=='FAIL' for row in result['checks'])
+
+
 def test_xlsx_discovers_renamed_sheets_and_inserted_columns_and_drops_customer_notes(tmp_path):
     path=tmp_path/'Update Report RPD 23112026.xlsx'
     book=Workbook();book.remove(book.active)
