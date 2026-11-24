@@ -5,7 +5,7 @@ let CURRENT_ROWS = [], CASE = null, caseReturnFocus = null, regionSort = 'instal
 let renderedTab='';const legacyPanels=new Map();
 let gridSequence=0;const grids=new Map(),gridStates=new Map();
 
-function rememberLegacyPanel(){const panel=document.querySelector('#main .legacy-report');if(panel&&renderedTab)legacyPanels.set(renderedTab,panel.open)}
+function rememberLegacyPanel(){if(renderedTab)document.querySelectorAll('#main .legacy-report').forEach((panel,index)=>legacyPanels.set(renderedTab+':'+(panel.id||index),panel.open))}
 const PAGE_SIZE = 50;
 const pageTitles = {ringkasan:'Ringkasan', analytics:'Analisis Kinerja', kelurahan:'Data Wilayah', korlap:'Kinerja Tim', outstanding:'Outstanding', data:'Cari PAM ID', catatan:'Admin'};
 const unavailable = 'Data belum tersedia';
@@ -54,7 +54,7 @@ function init(payload) {
 function localLogout() {
   window.RPDStatic?.stop();
   analysisRevision++;viewRevision++;searchRevision++;clearTimeout(searchTimer);
-  D=REC=WM=A=QUALITY=ADMIN=null;OV={};ROLE=CSRF='';SOURCE=CAP=BOOT={};CURRENT_ROWS=[];CASE=null;PAGE=0;
+  D=REC=WM=A=QUALITY=ADMIN=null;OV={};ROLE=CSRF='';SOURCE=CAP=BOOT={};CURRENT_ROWS=[];CASE=null;PAGE=0;grids.clear();gridStates.clear();legacyPanels.clear();renderedTab='';
   const dialog=$('#case-dialog');if(dialog?.open)dialog.close();if(dialog)dialog.remove();
   try{sessionStorage.removeItem('rpd_session_scope')}catch{}
   $('#main').innerHTML='';$('#app').hidden=true;$('#lg').hidden=false;$('#out').hidden=true;$('#lb').disabled=false;$('#lb').textContent='Masuk';$('#li').value='';$('#lp').value='';$('#le').textContent='';$('#sub').textContent='';setStatus('');$('#li').focus();
@@ -275,7 +275,7 @@ function render() {
   $('#page-title').textContent=pageTitles[S.tab];$('#main').setAttribute('aria-labelledby','tab-'+S.tab);
   if(!A){$('#main').innerHTML=skeleton();return}
   $('#main').innerHTML=({ringkasan:vExecutive,analytics:vAnalytics,kelurahan:vRegional,korlap:vTeam,outstanding:vOutstanding,data:vData,catatan:vGovernance})[S.tab]();
-  renderedTab=S.tab;const legacy=document.querySelector('#main .legacy-report');if(legacy&&legacyPanels.has(S.tab))legacy.open=legacyPanels.get(S.tab);if(ROLE!=='owner')$('#pdf')?.remove();
+  renderedTab=S.tab;document.querySelectorAll('#main .legacy-report').forEach((panel,index)=>{const key=S.tab+':'+(panel.id||index);if(legacyPanels.has(key))panel.open=legacyPanels.get(key)});if(ROLE!=='owner')$('#pdf')?.remove();
   if(S.tab==='kelurahan'&&ROLE==='owner')kt();if(['data','outstanding'].includes(S.tab))dt();if(S.tab==='catatan')loadGovernance(revision);
   if(S.tab==='catatan')window.RPDStatic?.ready(ROLE,BOOT);
   document.querySelectorAll('th[data-i]').forEach(cell=>{cell.tabIndex=0;cell.setAttribute('role','button');cell.setAttribute('aria-label','Urutkan '+cell.textContent.trim())});
