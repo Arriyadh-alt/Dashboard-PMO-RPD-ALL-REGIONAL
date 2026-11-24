@@ -106,7 +106,7 @@ def reconcile(intake, data, aliases, reference=None):
         and row['status'].casefold()==header(by_id[row['pam']]['installation_status'])
         for row in prepared['rows']))
     events=Counter(row['meter_date'] for row in survey if row['meter_date'] and header(row['installation_status'])=='done')
-    observed_events=Counter(row['install_date'].isoformat() for row in prepared['rows'] if row['installed'] and row['install_date'])
+    observed_events=Counter({row['month']:row['installation_events'] for row in analysis['trend_series']['daily'] if row['installation_events']})
     keys=events.keys()|observed_events.keys()
     check('Done meter daily event buckets',len(keys),sum(events[k]==observed_events[k] for k in keys))
     expected_teams, observed_teams=defaultdict(lambda:[0,0,0]),defaultdict(lambda:[0,0,0])
