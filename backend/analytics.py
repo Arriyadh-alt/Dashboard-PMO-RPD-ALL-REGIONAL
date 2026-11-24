@@ -7,6 +7,7 @@ not silently resolved. Historical state snapshots are never inferred from today'
 import calendar
 import hashlib
 import re
+from decimal import Decimal, ROUND_HALF_UP
 from collections import Counter, defaultdict
 from datetime import date, timedelta
 
@@ -407,3 +408,47 @@ def record_view(data, prepared, row, overrides, action=None):
             "obstacle": label(data, "kd", row["kd"]), "master_flag": label(data, "mf", row["mf"]),
             "potential_status": label(data, "pr", row["pr"]), "customer_status": label(data, "sc", row["sc"]),
             "arrears": row["tg"], "followup": action}
+
+
+RECORD_SORTS = ('pam', 'survey_date', 'regional', 'surveyor', 'canvassing', 'status', 'fa_date', 'obstacle', 'potential_status', 'arrears', 'followup')
+
+
+def search_records(data, prepared, filters, overrides, actions, body):
+    """Apply search/sort to the complete authorized scope, then paginate once."""
+    query, sort = body.get('query', ''), body.get('sort', '')
+    if not isinstance(query, str) or len(query) > 150 or sort not in ('', *RECORD_SORTS) or type(body.get('descending', False)) is not bool:
+        raise ValueError('Invalid record search or sort')
+    query = query.strip().casefold()
+    offset, limit = body.get('offset', 0), body.get('limit', 50)
+    selected, total = [], 0
+    searchable = ('pam', 'ref', 'survey_date', 'regional', 'area', 'kelurahan', 'surveyor', 'coordinator', 'canvassing', 'status', 'fa_date', 'installation_date', 'obstacle', 'master_flag', 'potential_status', 'customer_status', 'arrears')
+    for row in scoped_rows(data, prepared, filters, overrides):
+        if body.get('pam') and not row['pam'].startswith(str(body['pam']).strip().lstrip('0')): continue
+        if body.get('kelurahan') and body['kelurahan'].casefold() not in data['kels'][row['kel']].casefold(): continue
+        if body.get('surveyor') and body['surveyor'].casefold() not in data['svs'][row['sv']].casefold(): continue
+        if any(body.get(field) and row[key] != body[field] for field, key in [('canvassing', 'c1'), ('installation', 'kf'), ('potential', 'pr')]): continue
+        if body.get('outstanding_only') and not (row['interest'] and not row['installed'] and not row['cancelled']): continue
+        view = None
+        if query or sort:
+            view = record_view(data, prepared, row, overrides, actions.get(row['ref']))
+            if query:
+                action = view['followup']
+                followup = 'Belum dicatat' if not action else f"{action.get('pic', '')} {action.get('status', '')} {action.get('target_date') or 'Tanpa tenggat'}"
+                # Match the visible Indonesian number format, not only raw JSON.
+                value = view['arrears']
+                amount = 'Data belum tersedia' if value is None else format(Decimal(str(value)).quantize(Decimal('0.001'), rounding=ROUND_HALF_UP), ',f').rstrip('0').rstrip('.').translate(str.maketrans({',': '.', '.': ','}))
+                text = ' '.join(str(view[key]) if view[key] is not None else '–' for key in searchable)
+                if query not in f'{text} {amount} {followup}'.casefold(): continue
+        if sort or offset <= total < offset + limit:
+            selected.append(view if view is not None else record_view(data, prepared, row, overrides, actions.get(row['ref'])))
+        total += 1
+    if sort:
+        def key(item):
+            if sort == 'pam': return int(item['pam'])
+            if sort == 'arrears': return item['arrears'] or 0
+            if sort == 'followup': return tuple(str((item['followup'] or {}).get(k) or '').casefold() for k in ('pic', 'status', 'target_date'))
+            fields = {'regional': ('regional', 'area', 'kelurahan'), 'surveyor': ('surveyor', 'coordinator'), 'fa_date': ('fa_date', 'installation_date'), 'potential_status': ('master_flag', 'potential_status', 'customer_status')}.get(sort, (sort,))
+            return tuple(str(item[k] or '').casefold() for k in fields)
+        selected.sort(key=key, reverse=body.get('descending', False))
+        selected = selected[offset:offset + limit]
+    return dict(rows=selected, total=total, offset=offset, limit=limit)

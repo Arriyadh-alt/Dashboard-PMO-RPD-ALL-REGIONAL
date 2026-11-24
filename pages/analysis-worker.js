@@ -1,12 +1,13 @@
 /* Self-hosted Python/WASM worker: the reviewed analytics, not a second implementation. */
-import {loadPyodide} from './vendor/pyodide/pyodide.mjs';
-let python=null,reportReady=false,chain=Promise.resolve();
+const summaryReady=import('./summary.js?v='+encodeURIComponent(new URL(self.location.href).searchParams.get('summary')||''));
+let python=null,reportReady=false,chain=Promise.resolve(),initial=null,sourceObject=null,summary=null,bootstrapCache=null,pythonReady=false;
 const base=new URL('.',self.location.href),version=new URL(self.location.href).searchParams.get('engine')||'';
 const progress=()=>self.postMessage({progress:'Menyiapkan laporan di perangkat ini…'});
 
 async function runtime(){
   if(python)return python;
   progress();
+  const {loadPyodide}=await import('./vendor/pyodide/pyodide.mjs');
   python=await loadPyodide({indexURL:new URL('vendor/pyodide/',base).href});
   const response=await fetch(new URL('engine.zip?v='+encodeURIComponent(version),base));
   if(!response.ok)throw new Error('Mesin analitik lokal tidak tersedia. Muat ulang halaman.');
@@ -50,13 +51,39 @@ async function reports(){
 
 async function process(message){
   try{
+    await summaryReady;
+    if(message.type==='init'){
+      initial={...message,source:new TextDecoder().decode(message.source)};
+      const parsed=JSON.parse(initial.source);
+      if(parsed.aggregate_version===1){summary=parsed;sourceObject=null;if(message.role!=='guest')throw new Error('Invalid dataset role')}
+      else {if(message.role!=='owner')throw new Error('Guest dataset is not separated');sourceObject=parsed;summary=await RPDSummary.project(parsed)}
+      if(summary){bootstrapCache=RPDSummary.bootstrap(summary,sourceObject,initial.role,initial.info,initial.events);self.postMessage({id:message.id,ok:true,result:bootstrapCache});return}
+    }
+    if(!initial)throw new Error('Silakan masuk kembali.');
+    const url=message.path?new URL(message.path,'https://local.invalid'):null;
+    if(message.type==='request'&&url.pathname==='/api/bootstrap'&&bootstrapCache){self.postMessage({id:message.id,ok:true,result:bootstrapCache});return}
+    if(message.type==='request'&&url.pathname==='/api/analysis'&&summary&&(message.method||'GET')==='GET'){
+      const scope=Object.fromEntries(url.searchParams);scope.statuses=url.searchParams.getAll('status');
+      const fast=['ringkasan','kelurahan','data','catatan'].includes(scope.view)||initial.role==='guest';
+      if(fast&&!scope.coordinator&&!scope.statuses.length){const result=RPDSummary.analyse(summary,scope,initial.events);self.postMessage({id:message.id,ok:true,result});return}
+    }
+    if(initial.role!=='owner')throw new Error('Akses tidak diizinkan.');
+    if(message.type==='restore'&&!pythonReady){initial.events=message.events;bootstrapCache=RPDSummary.bootstrap(summary,sourceObject,initial.role,initial.info,initial.events);self.postMessage({id:message.id,ok:true,result:{ok:true}});return}
     await runtime();
-    if(message.type==='init')message.source=new TextDecoder().decode(message.source);
+    if(!pythonReady){
+      python.globals.set('_request_json',JSON.stringify(initial));
+      const loaded=JSON.parse(python.runPython('handle(_request_json)'));
+      python.runPython('del _request_json');if(!loaded.ok)throw new Error('Laporan rinci tidak tersedia');
+      pythonReady=true;bootstrapCache=loaded.result;
+      if(message.type==='init'){self.postMessage({id:message.id,...loaded});return}
+    }
     if(message.path&&/\/api\/reports\/[^?]+\.xlsx(\?|$)/.test(message.path))await reports();
     python.globals.set('_request_json',JSON.stringify(message));
     const response=JSON.parse(python.runPython('handle(_request_json)'));
     python.runPython('del _request_json');
+    if(response.ok&&message.type==='restore')initial.events=message.events;
+    if(response.ok&&message.mutation){initial.events=response.events;bootstrapCache=summary?RPDSummary.bootstrap(summary,sourceObject,initial.role,initial.info,initial.events):null}
     self.postMessage({id:message.id,...response});
-  }catch(error){self.postMessage({id:message.id,ok:false,error:'Laporan lokal tidak dapat disiapkan. '+error.message})}
+  }catch(error){self.postMessage({id:message.id,ok:false,error:initial?.role==='guest'?'Akses tidak diizinkan.':'Laporan belum dapat dimuat. Coba lagi.'})}
 }
 self.onmessage=event=>{chain=chain.then(()=>process(event.data)).catch(()=>{})};

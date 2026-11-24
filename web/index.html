@@ -5,9 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#112b3c">
 <title>Dashboard RPD · PMO</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="command-center.css">
 </head>
@@ -32,45 +29,35 @@
 </defs></svg>
 <div id="app" hidden>
 <aside class="sidebar" aria-label="Navigasi dashboard">
-<div class="brand"><span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-water"/></svg></span><div class="brand-copy"><div class="brand-name">RPD<span style="color:#6dcfc3">.</span></div><span class="brand-sub">PMO WORKSPACE</span></div></div>
+<div class="brand"><span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-water"/></svg></span><div class="brand-copy"><div class="brand-name">PMO RPD</div><span class="brand-sub">Seluruh Regional</span></div></div>
 <div class="nav-label">Menu utama</div>
 <div class="tabs" role="tablist" aria-label="Laporan dashboard" aria-orientation="vertical">
-<button id="tab-ringkasan" data-tab="ringkasan" role="tab" aria-controls="main" aria-selected="true"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg><span class="nav-text">Executive Overview</span></button>
-<button id="tab-analytics" data-tab="analytics" role="tab" aria-controls="main" aria-selected="false" tabindex="-1"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span class="nav-text">Performance Analytics</span></button>
-<button id="tab-kelurahan" data-tab="kelurahan" role="tab" aria-controls="main" aria-selected="false" tabindex="-1"><svg class="icon" aria-hidden="true"><use href="#i-map"/></svg><span class="nav-text">Regional &amp; Area</span></button>
-<button id="tab-korlap" data-tab="korlap" role="tab" aria-controls="main" aria-selected="false" tabindex="-1"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg><span class="nav-text">Team Performance</span></button>
-<button id="tab-outstanding" data-tab="outstanding" role="tab" aria-controls="main" aria-selected="false" tabindex="-1"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg><span class="nav-text">Outstanding &amp; Follow-up</span></button>
-<button id="tab-data" data-tab="data" role="tab" aria-controls="main" aria-selected="false" tabindex="-1"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span class="nav-text">Customer Lookup</span></button>
-<button id="tab-catatan" data-tab="catatan" role="tab" aria-controls="main" aria-selected="false" tabindex="-1"><svg class="icon" aria-hidden="true"><use href="#i-file"/></svg><span class="nav-text">Data Quality &amp; Admin</span></button>
+<button id="tab-ringkasan" data-tab="ringkasan" role="tab" aria-controls="main" aria-selected="true"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg><span class="nav-text">Ringkasan</span></button>
+<button id="tab-kelurahan" data-tab="kelurahan" role="tab" aria-controls="main" aria-selected="false" tabindex="-1"><svg class="icon" aria-hidden="true"><use href="#i-map"/></svg><span class="nav-text">Data Wilayah</span></button>
+<button id="tab-korlap" data-tab="korlap" role="tab" aria-controls="main" aria-selected="false" tabindex="-1"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg><span class="nav-text">Kinerja Tim</span></button>
+<button id="tab-outstanding" data-tab="outstanding" role="tab" aria-controls="main" aria-selected="false" tabindex="-1"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg><span class="nav-text">Outstanding</span></button>
+<button id="tab-data" data-tab="data" role="tab" aria-controls="main" aria-selected="false" tabindex="-1"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span class="nav-text">Cari PAM ID</span></button>
 </div>
-<div class="sidebar-bottom"><div class="sidebar-note"><strong>Data untuk langkah berikutnya.</strong>Pantau survei, pemasangan, dan potensi seluruh regional.</div><div class="sidebar-foot"><span class="status-dot"></span>PMO RPD · All Regional</div></div>
+<div class="sidebar-bottom"><button id="tab-catatan" class="admin-nav" data-tab="catatan" aria-controls="main" hidden><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg><span class="nav-text">Admin</span></button><button id="collapse-nav" aria-label="Tutup menu" aria-expanded="true"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg><span class="nav-text">Tutup menu</span></button></div>
 </aside>
 <div class="workspace">
-<header class="topbar"><div class="breadcrumb"><span>Workspace</span><span>/</span><strong>Dashboard RPD</strong></div><div class="top-actions"><button id="thm" class="theme-button" aria-label="Aktifkan tema gelap" title="Ganti tema"><svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg></button><div class="user-badge"><span class="avatar" aria-hidden="true">RP</span><div><div id="role">Guest</div><small>PMO RPD</small></div></div><button id="out" hidden>Keluar</button></div></header>
-<div class="w page-heading"><div><div class="eyebrow">Reconnection &amp; Permanent Disconnection</div><h1 id="page-title">Ringkasan dashboard</h1><p class="mu" id="sub"></p></div><div class="report-badge"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg><span id="period-label">Seluruh periode</span></div></div>
+<header class="topbar"><div class="breadcrumb"><strong>PMO RPD</strong><span>Monitoring Regional</span></div><div class="top-actions"><button id="thm" class="theme-button" aria-label="Aktifkan tema gelap" title="Ganti tema"><svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg></button><span id="role">Guest</span><button id="out" hidden>Keluar</button></div></header>
+<div class="w page-heading"><div><h1 id="page-title">Ringkasan</h1><p class="mu" id="sub"></p></div><span id="period-label" class="report-badge">Semua Data</span></div>
 <section class="bar" aria-label="Filter laporan"><div class="w"><button id="ft" aria-expanded="false" aria-controls="gf"><svg class="icon" aria-hidden="true"><use href="#i-filter"/></svg><span id="filter-text">Filter laporan</span></button><div class="fl" id="gf">
-<span class="filter-label"><svg class="icon" aria-hidden="true"><use href="#i-filter"/></svg>Filter</span>
-<div class="filter-field period"><label for="f0">Periode</label><select id="f0" aria-label="Awal periode survei"></select><span class="filter-to">–</span><select id="f1" aria-label="Akhir periode survei"></select></div><span class="filter-divider"></span>
-<div class="filter-field region"><select id="fr" aria-label="Regional"></select></div><div class="filter-field region"><select id="fa" aria-label="Area bisnis"></select></div><button id="rs"><svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg>Reset filter</button>
+<label class="filter-field">Periode<select id="fperiod"><option value="all">Semua Data</option><option value="today">Hari Ini</option><option value="week">7 Hari</option><option value="month">Bulan Ini</option><option value="custom">Pilih Periode</option></select></label>
+<label class="filter-field">Regional<select id="fr"></select></label><label class="filter-field">Area Bisnis<select id="fa"></select></label><label class="filter-field">Kelurahan<select id="fk"></select></label><button id="rs">Reset</button>
 </div></div></section>
-<section class="w command-toolbar" aria-label="Cakupan dan ekspor"><div id="active-filters"></div><div class="export-controls"><label for="report-kind">Laporan</label><select id="report-kind"><option value="executive">Executive Summary</option><option value="regional">Regional Performance</option><option value="area">Area Profiling</option><option value="team">Team Performance</option><option value="outstanding">Outstanding Monitoring</option></select><button data-export="csv">CSV</button><button data-export="xlsx">Excel</button><button data-export="pdf">PDF</button></div></section>
+<section class="w command-toolbar" aria-label="Cakupan dan ekspor"><div id="active-filters"></div><details class="export-menu" hidden><summary>Unduh laporan</summary><div class="export-controls"><label for="report-kind">Laporan</label><select id="report-kind"><option value="executive">Ringkasan</option><option value="regional">Data Regional</option><option value="area">Data Wilayah</option><option value="team">Kinerja Tim</option><option value="outstanding">Outstanding</option></select><button data-export="csv">CSV</button><button data-export="xlsx">Excel</button><button data-export="pdf">PDF</button></div></details></section>
 <p class="w service-status" id="service-status" role="status" aria-live="polite"></p>
 <main class="w" id="main" role="tabpanel" aria-labelledby="tab-ringkasan" tabindex="0"></main>
-<footer class="wm"><span>Design by Arriyadh · PMO RPD</span><span>Executive intelligence &amp; operational command center</span></footer>
+<footer class="wm"><span>PMO RPD · PAM JAYA</span><span>Design by Arriyadh</span></footer>
 </div>
 </div>
 <div id="lg">
-<section class="login-story" aria-label="PMO RPD Workspace">
-<div class="brand"><span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-water"/></svg></span><div><div class="brand-name">RPD<span style="color:#6dcfc3">.</span></div><span class="brand-sub">PMO WORKSPACE</span></div></div>
-<div class="story-content"><div class="eyebrow">All regional. One workspace.</div><h2>Satu data.<br><span>Langkah lebih terarah.</span></h2><p>Ruang kerja untuk memantau kinerja survei, progres pemasangan, dan potensi pelanggan di seluruh regional.</p>
-<div class="story-features"><div class="story-feature"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><div><strong>Kinerja yang terukur</strong><small>Dari canvassing hingga pemasangan.</small></div></div><div class="story-feature"><svg class="icon" aria-hidden="true"><use href="#i-map"/></svg><div><strong>Perspektif seluruh regional</strong><small>Telusuri area bisnis, kelurahan, RW, dan RT.</small></div></div><div class="story-feature"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg><div><strong>Tim yang terkoordinasi</strong><small>Pantau realisasi surveyor dan koordinator.</small></div></div></div></div>
-<div class="story-footer">Reconnection &amp; Permanent Disconnection<br>PMO RPD · Database Team</div>
-</section>
-<section class="login-form-side" aria-labelledby="login-title"><form class="lgc" id="login-form"><div class="login-lock"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg></div><div class="eyebrow">Selamat datang kembali</div><h1 id="login-title">Masuk ke dashboard</h1><p class="login-intro">Gunakan akun Anda untuk mengakses laporan<br>dan data operasional RPD.</p>
+<section class="login-form-side" aria-labelledby="login-title"><form class="lgc" id="login-form"><h1 id="login-title">PMO RPD</h1><p class="login-intro">Monitoring Kinerja Seluruh Regional</p>
 <label for="li">ID pengguna</label><input id="li" placeholder="Masukkan ID pengguna" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required>
 <label for="lp">Kata sandi</label><input id="lp" type="password" placeholder="Masukkan kata sandi" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" required>
-<button id="lb" class="login-submit" type="submit"><span>Masuk ke workspace</span><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button><p id="le" class="login-status" role="status" aria-live="polite"></p>
-<div class="login-security"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Sesi backend privat · Akses sesuai peran pengguna.</div><p class="login-credit">Design by Arriyadh · PMO RPD<br>Versi 23 Nov 2026</p>
+<button id="lb" class="login-submit" type="submit">Masuk</button><p id="le" class="login-status" role="status" aria-live="polite"></p>
 </form></section>
 </div>
  <script src="app.js" defer></script>

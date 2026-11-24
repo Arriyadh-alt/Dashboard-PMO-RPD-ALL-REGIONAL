@@ -8,7 +8,7 @@ import copy
 from datetime import date, datetime, timezone
 from urllib.parse import parse_qs,urlsplit
 
-from .analytics import DEFAULT_RULES,area_key,build_analysis,period_bounds,prepare,quality,record_view,scoped_rows,target_ref
+from .analytics import DEFAULT_RULES,area_key,build_analysis,period_bounds,prepare,quality,record_view,scoped_rows,target_ref,search_records
 from .exports import TITLES,make_report,report_content
 
 
@@ -126,16 +126,7 @@ class BrowserAPI:
         if route=='/api/records/search':
             filters=self.scope(body.get('scope',{}));overrides=store.latest('mapping').get('all',{});actions=store.latest('followup')
             offset=integer(body.get('offset',0),0,10**9);limit=integer(body.get('limit',50),1,100)
-            selected=[];total=0
-            for row in scoped_rows(source,prepared,filters,overrides):
-                if body.get('pam') and not row['pam'].startswith(str(body['pam']).strip().lstrip('0')): continue
-                if body.get('kelurahan') and body['kelurahan'].casefold() not in source['kels'][row['kel']].casefold(): continue
-                if body.get('surveyor') and body['surveyor'].casefold() not in source['svs'][row['sv']].casefold(): continue
-                if any(body.get(field) and row[key]!=body[field] for field,key in [('canvassing','c1'),('installation','kf'),('potential','pr')]): continue
-                if body.get('outstanding_only') and not (row['interest'] and not row['installed'] and not row['cancelled']): continue
-                if offset<=total<offset+limit: selected.append(record_view(source,prepared,row,overrides,actions.get(row['ref'])))
-                total+=1
-            return dict(rows=selected,total=total,offset=offset,limit=limit)
+            return search_records(source,prepared,filters,overrides,actions,{**body,'offset':offset,'limit':limit})
         if route.startswith('/api/followups/'):
             ref=route.rsplit('/',1)[-1]
             if not any(row['valid'] and row['ref']==ref for row in prepared['rows']): raise ValueError('Unknown case in current source')

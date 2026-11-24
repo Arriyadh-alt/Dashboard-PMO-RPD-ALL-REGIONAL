@@ -27,10 +27,12 @@ def engine(root=ROOT):
 
 
 def validate(envelope):
-    if not isinstance(envelope,dict) or set(envelope)-{'u','i','c','v'} or not {'u','i','c'}<=envelope.keys() or not isinstance(envelope['u'],dict) or not envelope['u']:
+    if not isinstance(envelope,dict) or set(envelope)-{'u','i','c','v','p'} or not {'u','i','c'}<=envelope.keys() or not isinstance(envelope['u'],dict) or not envelope['u']:
         raise ValueError('Only the existing encrypted envelope is publishable; plaintext is forbidden')
     if 'v' in envelope and (type(envelope['v']) is not int or envelope['v']!=2):
         raise ValueError('Unsupported envelope version; never put plaintext in public envelope fields')
+    if 'p' in envelope and (not isinstance(envelope['p'],str) or not re.fullmatch('[0-9a-f]{32}',envelope['p'])):
+        raise ValueError('Snapshot pairing marker must be a random 128-bit identifier')
     for value in [envelope['i'],envelope['c']]: base64.b64decode(value,validate=True)
     if len(base64.b64decode(envelope['i']))!=12 or len(base64.b64decode(envelope['c']))<16: raise ValueError('Invalid encrypted payload')
     for account,wrapped in envelope['u'].items():
@@ -40,7 +42,7 @@ def validate(envelope):
         if len(base64.b64decode(wrapped['i']))!=12 or len(base64.b64decode(wrapped['s']))<16 or len(base64.b64decode(wrapped['k']))!=48: raise ValueError('Invalid wrapped key')
 
 
-def build(source=None,owner=None,root=ROOT):
+def build(source=None,owner=None,root=ROOT,guest_source=None):
     asset=root/'pages/data.enc.json';manifest_path=root/'pages/data-manifest.json'
     previous=json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
     if source is not None:
@@ -51,6 +53,23 @@ def build(source=None,owner=None,root=ROOT):
         raw=asset.read_bytes();validate(json.loads(raw))
     fingerprint=hashlib.sha256(raw).hexdigest()
     manifest={'version':1,'fingerprint':fingerprint,'engine':engine(root),'worker':hashlib.sha256((ROOT/'pages/analysis-worker.js').read_bytes()).hexdigest(),'pdf':hashlib.sha256((ROOT/'pages/pdf.js').read_bytes()).hexdigest(),'published_at':previous.get('published_at') if previous.get('fingerprint')==fingerprint else datetime.now(timezone.utc).isoformat(timespec='seconds'),'ledger_salt':previous.get('ledger_salt') or base64.b64encode(os.urandom(16)).decode(),'owner':owner if owner is not None else previous.get('owner','')}
+    manifest['summary']=hashlib.sha256((ROOT/'pages/summary.js').read_bytes()).hexdigest()
+    guest_asset=root/'pages/guest.enc.json'
+    if guest_source is not None or guest_asset.exists():
+        guest_envelope=json.loads(Path(guest_source).read_text() if guest_source is not None else guest_asset.read_text())
+        validate(guest_envelope)
+        admin_envelope=json.loads(raw)
+        if not admin_envelope.get('p') or admin_envelope['p']!=guest_envelope.get('p'):
+            raise ValueError('Admin and Guest snapshots must be published as the matching pair')
+        if any(w['r']!='a' for w in admin_envelope['u'].values()) or any(w['r']!='g' for w in guest_envelope['u'].values()):
+            raise ValueError('Separated publication requires Admin-only full data and Guest-only aggregate data')
+        if set(admin_envelope['u'])&set(guest_envelope['u']):
+            raise ValueError('An account cannot have both payload capabilities')
+        guest_raw=(json.dumps(guest_envelope,separators=(',',':'))+'\n').encode()
+        manifest['guest_fingerprint']=hashlib.sha256(guest_raw).hexdigest()
+        manifest['accounts']={**admin_envelope['u'],**guest_envelope['u']}
+        manifest['snapshot_pair']=admin_envelope['p']
+        guest_asset.write_bytes(guest_raw)
     template=(ROOT/'web/index.html').read_text()
     template=template.replace('href="styles.css"','href="web/styles.css"').replace('href="command-center.css"','href="web/command-center.css"')
     template=template.replace('src="app.js"','src="web/app.js"').replace('src="command-center.js"','src="web/command-center.js"')
@@ -58,7 +77,8 @@ def build(source=None,owner=None,root=ROOT):
     note='<p class="scope-note">GitHub Pages · Data dibuka di perangkat ini. Pemegang kata sandi dapat mengakses seluruh data; peran tampilan bukan otorisasi server. Follow-up/pengaturan disimpan terenkripsi hanya pada peramban dan akun ini, tidak tersinkron ke tim. Usia kasus mengikuti jam perangkat.</p><details id="local-history-controls" hidden><summary>Cadangan riwayat lokal terenkripsi</summary><p>Unduh sebelum berganti perangkat atau kata sandi. Pulihkan hanya pada riwayat kosong; jangan hapus penyimpanan sebelum mencadangkan.</p><button id="backup-local" type="button">Unduh cadangan terenkripsi</button><label>Pulihkan cadangan <input id="restore-local" type="file" accept="application/json,.json"></label></details>'
     note+='<details id="legacy-mapping-controls" hidden><summary>Pemetaan dari dashboard lama perlu ditinjau</summary><p>Pemetaan lama memakai nomor urut, bukan identitas surveyor. Pastikan pasangan berikut cocok dengan sumber lama sebelum mengimpor. Pemetaan terenkripsi yang sudah ada didahulukan; data sumber tidak diubah. Salinan lama baru dihapus setelah penyimpanan terenkripsi berhasil.</p><div id="legacy-mapping-preview" style="max-height:12rem;overflow:auto"></div><button id="backup-legacy-mapping" type="button">Unduh salinan lama (JSON lokal)</button><label><input id="confirm-legacy-mapping" type="checkbox"> Saya telah memverifikasi identitas dan pemetaan setiap surveyor.</label><button id="import-legacy-mapping" type="button" disabled>Impor ke riwayat terenkripsi</button><p id="legacy-mapping-status" role="status"></p></details>'
     note=note.replace('<button id="backup-local"','<div id="history-recovery" hidden><p>Riwayat lama terkunci; laporan sementara hanya memakai data sumber. Riwayat tidak dihapus atau ditimpa. Unduh cadangan asli, atau buka dengan kata sandi lama untuk mengenkripsi ulang memakai kata sandi login sekarang.</p><label>Kata sandi lama riwayat <input id="previous-history-password" type="password" autocomplete="off"></label><button id="recover-history" type="button">Buka dan enkripsi ulang riwayat</button><p id="history-recovery-status" role="status"></p></div><button id="backup-local"')
-    template=template.replace('<main ',note+'\n<main ',1)
+    note=note[note.index('<details id="local-history-controls"'):]
+    template=template.replace('<main ','<template id="local-admin-tools">'+note+'</template>\n<main ',1)
     template=template.replace('Backend privat','Mode GitHub Pages').replace('Layanan privat','Dashboard terenkripsi')
     template=template.replace('Sesi backend privat · Akses sesuai peran pengguna.','Dekripsi lokal · Pemegang kata sandi dapat mengakses seluruh data.')
     template=template.replace('</head>','<meta name="referrer" content="no-referrer">\n<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\' \'wasm-unsafe-eval\'; worker-src \'self\'; connect-src \'self\'; style-src \'self\' \'unsafe-inline\' https://fonts.googleapis.com; font-src \'self\' https://fonts.gstatic.com; img-src \'self\' data: blob:; object-src \'none\'; base-uri \'none\'; form-action \'self\'">\n</head>')
@@ -77,6 +97,7 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('source',nargs='?',type=Path,help='Validated encrypted source JSON, never a plaintext workbook/JSON')
     parser.add_argument('--owner',help='Verified data-owner label; use SYNTHETIC TEST DATA for test fixtures')
+    parser.add_argument('--guest-source',type=Path,help='Paired aggregate-only encrypted Guest envelope')
     args=parser.parse_args()
-    manifest=build(args.source,args.owner)
+    manifest=build(args.source,args.owner,guest_source=args.guest_source)
     print('Static Pages build ready; encrypted source fingerprint:',manifest['fingerprint'])

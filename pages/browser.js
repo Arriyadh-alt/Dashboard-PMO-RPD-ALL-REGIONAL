@@ -19,29 +19,36 @@
       const account=String(body.account||'').replace(/\s/g,'').toLowerCase(),password=String(body.password||'').trim();
       if(!account||!password)throw new Error('Masukkan ID dan kata sandi.');
       manifest=await jsonFile('pages/data-manifest.json');
-      const response=await fetch(new URL('pages/data.enc.json?v='+encodeURIComponent(manifest.fingerprint),root),{cache:'no-store',credentials:'omit'});
+      actor=(await hash(encoder.encode(account))).slice(0,16);
+      const entry=manifest.accounts?.[actor];let wrappingKey,dataKey,wrapped;
+      if(manifest.accounts){
+        if(!entry)throw new Error('ID pengguna atau kata sandi salah.');
+        wrapped=entry;wrappingKey=await derive(account+'\n'+password,bytes(wrapped.s));
+        try{dataKey=await crypto.subtle.importKey('raw',await decrypt(wrappingKey,wrapped.i,wrapped.k),{name:'AES-GCM'},false,['decrypt'])}catch{throw new Error('ID pengguna atau kata sandi salah.')}
+      }
+      performance.mark('rpd:credential-verified');
+      const guest=wrapped?.r==='g',fingerprint=guest?manifest.guest_fingerprint:manifest.fingerprint;
+      const response=await fetch(new URL((guest?'pages/guest.enc.json':'pages/data.enc.json')+'?v='+encodeURIComponent(fingerprint),root),{cache:'no-store',credentials:'omit'});
       if(!response.ok)throw new Error('Sumber terenkripsi tidak tersedia.');
       const encoded=await response.arrayBuffer();
-      if(await hash(encoded)!==manifest.fingerprint)throw new Error('Versi data sedang diperbarui. Muat ulang halaman.');
+      if(await hash(encoded)!==fingerprint)throw new Error('Data sedang diperbarui. Coba lagi.');
+      performance.mark('rpd:data-fetched');
       const envelope=JSON.parse(new TextDecoder().decode(encoded));
-      actor=(await hash(encoder.encode(account))).slice(0,16);
-      const wrapped=envelope.u[actor];if(!wrapped)throw new Error('ID atau kata sandi tidak valid.');
-      const wrappingKey=await derive(account+'\n'+password,bytes(wrapped.s));
-      let dataKey;
-      try{dataKey=await crypto.subtle.importKey('raw',await decrypt(wrappingKey,wrapped.i,wrapped.k),{name:'AES-GCM'},false,['decrypt'])}catch{throw new Error('ID atau kata sandi tidak valid.')}
+      if(!wrapped){wrapped=envelope.u[actor];if(!wrapped)throw new Error('ID pengguna atau kata sandi salah.');wrappingKey=await derive(account+'\n'+password,bytes(wrapped.s));try{dataKey=await crypto.subtle.importKey('raw',await decrypt(wrappingKey,wrapped.i,wrapped.k),{name:'AES-GCM'},false,['decrypt'])}catch{throw new Error('ID pengguna atau kata sandi salah.')}}
       const packed=await decrypt(dataKey,envelope.i,envelope.c);
       const source=await new Response(new Blob([packed]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
-      accountId=account;key=await derive('rpd-local-events:v1\n'+account+'\n'+password,bytes(manifest.ledger_salt));
+      performance.mark('rpd:decrypted');
+      accountId=account;key=wrapped.r==='a'?await derive('rpd-local-events:v1\n'+account+'\n'+password,bytes(manifest.ledger_salt)):null;
       storageKey='rpd_local_v1_'+manifest.ledger_salt.slice(0,12)+'_'+actor;
-      try{cachedRaw=localStorage.getItem(storageKey)}catch{cachedRaw=null}
+      try{cachedRaw=key?localStorage.getItem(storageKey):null}catch{cachedRaw=null}
       if(cachedRaw){try{events=await openState(cachedRaw)}catch{historyLocked=true;events=[]}}
       if(epoch!==generation)throw new Error('Sesi diganti. Silakan masuk kembali.');
-      worker=new Worker(new URL('pages/analysis-worker.js?v='+encodeURIComponent(manifest.worker)+'&engine='+encodeURIComponent(manifest.engine),root),{type:'module'});
+      worker=new Worker(new URL('pages/analysis-worker.js?v='+encodeURIComponent(manifest.worker)+'&engine='+encodeURIComponent(manifest.engine)+'&summary='+encodeURIComponent(manifest.summary||''),root),{type:'module'});
       worker.onmessage=event=>{const message=event.data;if(message.progress){const label=document.getElementById('le');if(label&&!document.getElementById('lg').hidden)label.textContent=message.progress;return}const request=pending.get(message.id);if(!request)return;pending.delete(message.id);message.ok?request.resolve(message):request.reject(new Error(message.error||'Operasi lokal gagal.'))};
       worker.onerror=()=>{for(const request of pending.values())request.reject(new Error('Mesin laporan lokal gagal dimuat. Gunakan peramban terbaru dan muat ulang.'));pending.clear()};
       const result=await call({type:'init',source,role:wrapped.r==='a'?'owner':'guest',actor,events,info:{fingerprint:manifest.fingerprint,loaded_at:new Date().toISOString(),imported_at:null,published_at:manifest.published_at,owner:manifest.owner||'',snapshot_count:1,history_locked:historyLocked,storage_mode:'Encrypted browser-local history; not shared or tamper-proof'}},[source]);
-      return result.result;
-    }catch(error){stop();throw error}
+      performance.mark('rpd:bootstrap');return result.result;
+    }catch(error){stop();if(error instanceof TypeError)throw new Error('Koneksi bermasalah. Coba lagi.');if(/kata sandi salah|Data sedang diperbarui|Masukkan ID/.test(error.message))throw error;throw new Error('Tidak dapat masuk. Coba lagi atau hubungi administrator.')}
   }
   async function locked(task,recovery=false){if(historyLocked&&!recovery)throw new Error('Riwayat lama terkunci. Pulihkan dengan kata sandi lama sebelum menyunting; data lama tidak ditimpa.');if(!navigator.locks)throw new Error('Penyuntingan lokal memerlukan peramban dengan Web Locks. Gunakan Chrome/Edge terbaru; laporan tetap dapat dibaca.');return navigator.locks.request(storageKey,async()=>{if(localStorage.getItem(storageKey)!==cachedRaw)throw new Error('Riwayat berubah di tab lain. Keluar dan masuk kembali sebelum menyunting.');return task()})}
   async function persist(next){const epoch=generation,targetKey=storageKey,raw=await encrypt(next);if(epoch!==generation||targetKey!==storageKey)throw new Error('Sesi lokal ditutup sebelum penyimpanan.');try{localStorage.setItem(targetKey,raw)}catch{throw new Error('Riwayat belum disimpan: penyimpanan peramban penuh/tidak tersedia. Unduh cadangan dan jangan tutup halaman.')}cachedRaw=raw;events=next}
