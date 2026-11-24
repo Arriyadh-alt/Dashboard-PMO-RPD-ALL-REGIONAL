@@ -8,15 +8,23 @@ Keep the existing Pages configuration: **main branch, root `/`**. Merging publis
 
 Sign-in retains PBKDF2-500,000/SHA-256/AES-GCM/gzip. The initial Ringkasan and aggregate geography/time filters use identity-free additive cubes **only after proving one valid row per PAM**; JavaScript/Python parity tests cover unique metrics, stock, regions, areas, trends, dates and previous periods. Duplicate/ambiguous owner snapshots fall back to the unchanged Python analytics. Detailed team, case, diagnostics and exports load self-hosted Python/WASM only when needed. Bootstrap is no longer requested twice. CSV/XLSX/PDF retain their existing report models and calculation definitions.
 
-**Current access model:** Admin-only `pages/data.enc.json` has a freshly generated customer-data key. Guest-only `pages/guest.enc.json` contains counts by survey/installation date and regional/area/kelurahan, master stock, date coverage and geographic labels—**no PAM IDs, roster names, staff mappings, customer dictionaries, arrears, PDFs, operational notes or local events**. Guest credentials retain their old wrapped key, which cannot decrypt the newly protected Admin payload. Admin passwords must be provided once to rewrap the new key; no account is silently disabled. Guest can use Ringkasan and Data Wilayah only; lookup, team, outstanding details, Admin and exports are not granted.
+**V3 access model:** Public visitors see only `pages/public-summary.json`: the five approved KPIs, regional totals and monthly performance trend. No operational JavaScript, account manifest, encrypted source, customer record, staff name, kelurahan or RW/RT data is requested before choosing **Masuk**. Missing public data shows an empty state, never a protected-data fallback.
 
-This is cryptographic separation of static data, **not backend authorization**. Hiding buttons or changing browser role flags cannot produce the Admin key. Both encrypted files are publicly downloadable. **Historical full snapshots remain in public Git history and cannot be revoked: previously authorized Guest passwords can still decrypt those older snapshots.** There are no server sessions, server throttling, shared audit ledger or remote revocation. Removing those historical copies or revoking previously obtained data is outside this change. No decrypted customer records or passwords are persisted.
+Internal **Guest** now has all five operational menus, named team drilldowns, PAM lookup, outstanding details, RT/RW potential and read-only reports. This intentionally supersedes V2's aggregate-only Guest restriction. Admin retains existing tools, local follow-ups/settings/mappings, exports and the daily workbook workflow. Guest's encrypted full snapshot excludes the Admin-only access-management sidecar. Both Admin logins and the existing Guest wrappers remain unchanged; Guest cannot decrypt the Admin-key envelope.
 
-### One-time access migration and subsequent refreshes
+Login downloads only a role-specific encrypted overview (about 104 KB), not the full operational source (about 2.28 MB). The full snapshot is decrypted on the first detailed workspace/report request; Python/WASM remains deferred until detailed analytics/search/export needs it. Two recent detailed analysis scopes are cached across menu transitions and invalidated on local mutations.
 
-Run `python -m scripts.split_access OLD_ENVELOPE PRIVATE_ADMIN_OUTPUT PRIVATE_GUEST_OUTPUT` outside Git using authorized Admin credentials via secure environment bindings/prompts. Provide the second Admin through `RPD_SECOND_ADMIN_ID` / `RPD_SECOND_ADMIN_PASSWORD`. The tool refuses missing Admin credentials; `--disable-other-admins` is only for an explicitly approved account retirement. Review/decrypt both outputs and verify Guest-key failure against the Admin payload before publication. Publish the pair with `python -m scripts.build_pages PRIVATE_ADMIN_OUTPUT --guest-source PRIVATE_GUEST_OUTPUT`.
+**Honest static-hosting limit:** this is encryption and browser-side presentation policy, **not trusted backend authorization**. The controller, worker and local adapter reject Guest mutations/Admin routes, but a person controlling their own browser can inspect decrypted data and modify their own local copy. **No dashboard role can write shared records through Pages:** canonical changes require an authorized GitHub workbook PR. Admin local history is encrypted per account/browser and is not shared with Guest or other Admins. Ciphertext is publicly downloadable through direct URLs, and previously published ciphertext/password access cannot be revoked retrospectively. A backend would add server-enforced sessions/roles, centralized writes/history, throttling and revocation; none is provisioned or added in V3. No plaintext customer records or passwords are persisted.
 
-For subsequent daily refreshes, `scripts.update_encrypted` requires `--guest-output PRIVATE_GUEST_OUTPUT` for a protected source. It preserves the current Admin and Guest wrappers, rebuilds the Guest projection from the same validated contract and uses fresh payload IVs. Always publish the pair together. `check_public.py` blocks production publication without separate role-specific envelopes and matching fingerprints. Plaintext contracts, keys, passwords and aliases stay outside the repository.
+### Field potential definitions and source parity
+
+Data Wilayah adds searchable Regional → Area Bisnis → Kelurahan → RW → RT controls. Choosing RW immediately shows RT rows; selections survive workspace navigation within the session. Mobile collapses the selected area context, leaving RW/RT checking close at hand. Unknown RW/RT remain explicit, not silently excluded.
+
+All five field metrics use **eligible MASTER DATA potential, all periods**, not the broader survey cohort. `W[0..6]` retain area/kelurahan/RW/RT/potential/matched-interested/installed exactly; new `W[7]` counts master potential PAM IDs found in the survey workbook. Sisa remains **potential − matched interested**, not potential − canvassed. Period/team/status filters do not change master stock. The one-time V3 enrichment checked all 20,102 RW/RT groups, reconciled W to P at every kelurahan, and preserved every other source field and the original PDF. Historical snapshots without the extra column show unavailable canvassing, not invented zeros.
+
+### Paired daily publication
+
+`scripts.publish_v3` preserves Admin/Guest wrappers, uses fresh IVs and emits four paired encrypted files plus the strictly allowlisted public projection. `scripts.build_pages --bundle-dir` validates matching snapshot IDs, wrappers, fingerprints and public totals before replacing release assets. A stale/mixed generation is rejected. The previous V2 split/update tools remain for historical envelopes; V3 envelopes require the full V3 release workflow below. Plaintext, keys, passwords and roster aliases stay outside the repository.
 
 ### Performance evidence
 
@@ -76,9 +84,9 @@ After that review, the repeatable encrypted publishing path is:
 ```sh
 # Plaintext contract and new encrypted generation stay outside this checkout.
 # Passwords are prompted privately (or supplied through secure process environment).
-.venv/bin/python -m scripts.update_encrypted pages/data.enc.json /secure/validated-daily.json /secure/daily-NEW.enc.json
+.venv/bin/python -m scripts.publish_v3 pages/data.enc.json /secure/validated-daily.json /secure/release-NEW --approve-public-summary
 # Verify the printed unique totals against the Excel workbook before publishing.
-.venv/bin/python -m scripts.build_pages /secure/daily-NEW.enc.json
+.venv/bin/python -m scripts.build_pages --bundle-dir /secure/release-NEW
 .venv/bin/python scripts/check_public.py
 ```
 

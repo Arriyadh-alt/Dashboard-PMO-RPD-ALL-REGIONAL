@@ -11,5 +11,7 @@ __pycache__/
 *.enc.json
 !/pages/data.enc.json
 !/pages/guest.enc.json
+!/pages/overview.enc.json
+!/pages/guest-overview.enc.json
 node_modules/
 test-results/

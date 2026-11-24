@@ -137,7 +137,7 @@ def legacy_pdf(data):
     return base64.b64encode(stream.getvalue()).decode()
 
 
-def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False):
+def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False, neighborhood_counts=False):
     if not full_snapshot:
         raise ValueError('Explicit full-snapshot confirmation is required; never append cumulative input')
     prepare(baseline)
@@ -211,8 +211,11 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False):
         except (KeyError, ValueError) as error:
             raise ValueError('Unreviewed classification in field ' + field) from error
 
+    # V3 extends W only; the seven established columns keep their exact meaning.
+    # Old snapshots remain reproducible. Once upgraded, daily refreshes retain it.
+    neighborhood_counts = neighborhood_counts or any(len(row) == 8 for row in baseline['W'])
     groups = {name: defaultdict(lambda n=n: [0]*n)
-              for name, n in [('A', 10), ('S', 10), ('K', 9), ('E', 2), ('P', 3), ('W', 3)]}
+              for name, n in [('A', 10), ('S', 10), ('K', 9), ('E', 2), ('P', 3), ('W', 4 if neighborhood_counts else 3)]}
     rec = {key: [] for key in RECORD_FIELDS}
     # Preserve existing row order for stable customer references and parity checks.
     ordered_ids = old_ids + [pam for pam in survey if pam not in old_set]
@@ -291,6 +294,8 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False):
         for name, key in [('P', (area, kel)), ('W', (area, kel, rw, rt))]:
             for j, value in enumerate([1, int(interested), int(done)]):
                 groups[name][key][j] += value
+            if name == 'W' and neighborhood_counts:
+                groups[name][key][3] += int(row is not None)
     sync['outside'] = sum(text(r['result']) == 'Berminat' for pam, r in survey.items() if pam not in master)
     data['rec'] = rec
     for name, width in [('A', 2), ('S', 4), ('K', 3), ('E', 2), ('P', 2), ('W', 4)]:
@@ -302,7 +307,8 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False):
     changed = data != baseline
     if bootstrap and changed:
         raise ValueError('Alias bootstrap requires exact record, classification and aggregate parity')
-    if changed and baseline.get('pdf'):
+    only_neighborhood_extension = all(data.get(key) == value for key, value in baseline.items() if key != 'W') and [row[:7] for row in data['W']] == [row[:7] for row in baseline['W']]
+    if changed and not only_neighborhood_extension and baseline.get('pdf'):
         data['pdf'] = legacy_pdf(data)
     prepare(data)
     return data, {'changed': changed, 'survey_rows': len(survey), 'master_rows': len(master),
@@ -324,6 +330,7 @@ def main():
                         help='Private roster sidecar (existing input, or new bootstrap output)')
     parser.add_argument('--bootstrap-aliases', action='store_true')
     parser.add_argument('--full-snapshot', action='store_true')
+    parser.add_argument('--neighborhood-counts', action='store_true', help='Add verified master-linked canvassing counts per RW/RT (V3)')
     args = parser.parse_args()
     for path in (args.intake, args.contract_output, args.aliases):
         private_path(path)
@@ -337,7 +344,7 @@ def main():
     intake = json.loads(args.intake.read_text())
     aliases = bootstrap_aliases(baseline, intake) if args.bootstrap_aliases else json.loads(args.aliases.read_text())
     data, summary = convert(baseline, intake, aliases, full_snapshot=args.full_snapshot,
-                            bootstrap=args.bootstrap_aliases)
+                            bootstrap=args.bootstrap_aliases, neighborhood_counts=args.neighborhood_counts)
     write_private(args.contract_output, data)
     if args.bootstrap_aliases:
         write_private(args.aliases, aliases)

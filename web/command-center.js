@@ -42,11 +42,12 @@ async function download(path, filename) {
 
 function init(payload) {
   BOOT=payload;D=payload.data;ROLE=payload.role;CSRF=payload.csrf;SOURCE=payload.source;CAP=payload.capabilities;OV=payload.overrides;WM=null;
-  Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,coordinator:'',statuses:[],start:'',end:'',tab:'ringkasan',q:'',open:'',all:0,advanced:false});
+  Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,rw:-1,rt:-1,coordinator:'',statuses:[],start:'',end:'',tab:'ringkasan',q:'',open:'',all:0,advanced:false});
+  window.RPDPublic?.hide();
   $('#lg').hidden=true;$('#app').hidden=false;$('#out').hidden=false;$('#role').textContent=ROLE==='owner'?'Admin':'Guest';
   $('#sub').textContent='Tanggal survei: '+fd(D.meta.tmin)+' – '+fd(D.meta.tmax);
-  $('#tab-catatan').hidden=ROLE!=='owner';document.querySelector('.export-menu').hidden=ROLE!=='owner';
-  for(const tab of ['korlap','outstanding','data'])$('#tab-'+tab).hidden=ROLE!=='owner';
+  $('#tab-catatan').hidden=ROLE!=='owner';document.querySelector('.export-menu').hidden=!CAP.customer_detail;
+  for(const tab of ['korlap','outstanding','data'])$('#tab-'+tab).hidden=!CAP.customer_detail;
   try{const saved=JSON.parse(sessionStorage.getItem('rpd_session_scope')||'null'),scope=resolvePreset(saved);if(scope)Object.assign(S,scope)}catch{}
   S.coordinator='';S.statuses=[];$('#lp').value='';$('#li').value='';refresh();$('#main').focus({preventScroll:true});
   window.RPDStatic?.ready(ROLE,BOOT);
@@ -60,6 +61,7 @@ function localLogout() {
   const dialog=$('#case-dialog');if(dialog?.open)dialog.close();if(dialog)dialog.remove();
   try{sessionStorage.removeItem('rpd_session_scope')}catch{}
   $('#main').innerHTML='';$('#app').hidden=true;$('#lg').hidden=false;$('#out').hidden=true;$('#lb').disabled=false;$('#lb').textContent='Masuk';$('#li').value='';$('#lp').value='';$('#le').textContent='';$('#sub').textContent='';setStatus('');$('#li').focus();
+  window.RPDPublic?.show();
 }
 
 async function go() {
@@ -73,7 +75,12 @@ async function refresh() {
   if(!D)return;rememberLegacyPanel();const revision=++analysisRevision;viewRevision++;searchRevision++;A=null;PAGE=0;setStatus('');fill();
   $('#main').setAttribute('aria-busy','true');$('#main').innerHTML=skeleton();
   try{sessionStorage.setItem('rpd_session_scope',JSON.stringify(presetScope()))}catch{}
-  try {const result=await api('/api/analysis?'+params()+'&view='+encodeURIComponent(S.tab==='kelurahan'&&S.advanced?'details':S.tab));if(revision!==analysisRevision||!D)return;A=result;render();performance.mark('rpd:usable')}
+  try {
+    if(window.RPDStatic&&CAP.customer_detail&&S.tab!=='ringkasan'&&!CAP.details_loaded){
+      const loaded=await api('/api/bootstrap?details=1');if(revision!==analysisRevision||!D)return;
+      D=loaded.data;BOOT=loaded;CAP=loaded.capabilities;OV=loaded.overrides;WM=null;fill();
+    }
+    const result=await api('/api/analysis?'+params()+'&view='+encodeURIComponent(S.tab==='kelurahan'&&S.advanced?'details':S.tab));if(revision!==analysisRevision||!D)return;A=result;render();performance.mark('rpd:usable')}
   catch(error){if(revision!==analysisRevision)return;setStatus(error.message);$('#main').innerHTML=blank('Laporan belum tersedia','Ubah filter atau coba kembali. Tidak ada hasil lama yang ditampilkan sebagai hasil filter baru.')+'<p><button id="retry-analysis">Coba kembali</button></p>'}
   finally{if(revision===analysisRevision)$('#main').setAttribute('aria-busy','false')}
 }
@@ -82,7 +89,7 @@ function presetList() {try{const data=JSON.parse(localStorage.getItem('rpd_filte
 function savePresetList(value){try{localStorage.setItem('rpd_filter_presets',JSON.stringify(value))}catch{setStatus('Preset tidak dapat disimpan pada peramban ini.')}}
 
 function presetScope(){
-  return {version:2,scope:scopeObject(),period:[D.months[S.m0],D.months[S.m1]],openingBucket:S.m0===0,areaKey:S.ab>=0?BOOT.area_keys[S.ab]:null,kelName:S.kel>=0?D.kels[S.kel]:null};
+  return {version:2,scope:scopeObject(),field:{rw:S.rw??-1,rt:S.rt??-1},period:[D.months[S.m0],D.months[S.m1]],openingBucket:S.m0===0,areaKey:S.ab>=0?BOOT.area_keys[S.ab]:null,kelName:S.kel>=0?D.kels[S.kel]:null};
 }
 
 function resolvePreset(value){
@@ -99,14 +106,15 @@ function resolvePreset(value){
   const coordinator=scope.coordinator||'',teams=D.S.filter(row=>(!reg||D.reg[row[1]]===reg)&&(ab<0||row[1]===ab)).map(eKl);
   if(coordinator&&!teams.includes(coordinator))return null;
   if(!Array.isArray(scope.statuses)||scope.statuses.some(status=>!D.dic.kf.includes(status)))return null;
-  return {m0,m1,reg,ab,kel:value.kelName===null?-1:kelIds[0],coordinator,statuses:scope.statuses,start:scope.start||'',end:scope.end||''};
+  const neighborhood=key=>Number.isInteger(value.field?.[key])&&value.field[key]>=0&&value.field[key]<=999?value.field[key]:-1;
+  return {m0,m1,reg,ab,kel:value.kelName===null?-1:kelIds[0],rw:neighborhood('rw'),rt:neighborhood('rt'),coordinator,statuses:scope.statuses,start:scope.start||'',end:scope.end||''};
 }
 
 function fill() {
   if(!D)return;
   if(!$('#fco'))$('#gf').insertAdjacentHTML('beforeend',`<details class="more-filters" id="extra-filters"><summary>Periode khusus &amp; filter lainnya</summary><input id="filter-search" type="hidden"><div class="advanced-grid"><label class="field">Dari bulan<select id="f0"></select></label><label class="field">Sampai bulan<select id="f1"></select></label><label class="field">Dari tanggal<input id="fstart" type="date"></label><label class="field">Sampai tanggal<input id="fend" type="date"></label><label class="field team-filter">Koordinator / tim<select id="fco"></select></label><label class="field status-filter">Status pemasangan<select id="fstatus" multiple size="3"></select></label></div><details class="preset-row"><summary>Filter tersimpan</summary><input id="preset-name" aria-label="Nama filter" maxlength="50" placeholder="Nama filter"><button id="save-preset">Simpan</button><select id="preset-list" aria-label="Filter tersimpan"></select><button id="load-preset">Terapkan</button><button id="delete-preset">Hapus</button></details></details>`);
-  document.querySelector('.team-filter').hidden=ROLE!=='owner'||!['korlap','outstanding','data'].includes(S.tab);
-  document.querySelector('.status-filter').hidden=ROLE!=='owner'||!['outstanding','data'].includes(S.tab);
+  document.querySelector('.team-filter').hidden=!CAP.customer_detail||!['korlap','outstanding','data'].includes(S.tab);
+  document.querySelector('.status-filter').hidden=!CAP.customer_detail||!['outstanding','data'].includes(S.tab);
   $('#f0').innerHTML=D.months.map((_,i)=>option(i,ML(i),i===S.m0)).join('');
   $('#f1').innerHTML=D.months.map((_,i)=>option(i,ML(i),i===S.m1)).join('');
   $('#fr').innerHTML=option('','Semua regional',!S.reg)+[...new Set(D.reg)].sort().map(region=>option(region,region,region===S.reg)).join('');
@@ -199,17 +207,46 @@ function regionTable() {
 }
 
 function vRegional() {
-  return regionTable()+`<h2>Area Bisnis</h2>`+dataTable(['Area Bisnis','Regional','Tercanvassing','Berminat','Terpasang','Sisa Potensi','Persentase Terpasang'],A.areas.map(row=>[`<button data-area="${row.key}">${esc(row.name)}</button>`,esc(row.regional),N(row.canvassed),N(row.interested),N(row.installed),N(row.remaining),percent(row.installation_rate)]))+
+  return (CAP.customer_detail?potentialView():'')+`<details class="legacy-report"><summary>Kinerja Regional &amp; Area Bisnis</summary>`+regionTable()+`<h2>Area Bisnis</h2>`+dataTable(['Area Bisnis','Regional','Tercanvassing','Berminat','Terpasang','Sisa Potensi','Persentase Terpasang'],A.areas.map(row=>[`<button data-area="${row.key}">${esc(row.name)}</button>`,esc(row.regional),N(row.canvassed),N(row.interested),N(row.installed),N(row.remaining),percent(row.installation_rate)]))+
   '<p class="scope-caption">Potensi mengikuti stok master seluruh periode; kinerja mengikuti filter tanggal survei.</p>'+
-  (ROLE==='owner'?`<details class="legacy-report" id="area-details"${S.advanced?' open':''}><summary>Analisis Kinerja &amp; Prioritas Wilayah</summary>${S.advanced?vAnalytics()+dataTable(['Area Bisnis','Prioritas','Alasan'],A.areas.map(r=>[esc(r.name),esc(r.priority),esc(r.reason)])):''}</details><details class="legacy-report"><summary>Rincian Kelurahan, RW &amp; RT</summary>${notice('Stok master seluruh periode; hanya filter regional dan area bisnis berlaku.')}${vKel()}</details>`:'');
+  '</details>'+(CAP.customer_detail?`<details class="legacy-report" id="area-details"${S.advanced?' open':''}><summary>Analisis Kinerja &amp; Prioritas Wilayah</summary>${S.advanced?vAnalytics()+dataTable(['Area Bisnis','Prioritas','Alasan'],A.areas.map(r=>[esc(r.name),esc(r.priority),esc(r.reason)])):''}</details><details class="legacy-report"><summary>Rincian Kelurahan, RW &amp; RT Sebelumnya</summary>${notice('Stok master seluruh periode; hanya filter regional dan area bisnis berlaku.')}${vKel()}</details>`:'');
+}
+
+function potentialView(){
+  const parent=D.W.filter(row=>RPDPotential.inArea(D,S,row)),rws=[...new Set(parent.map(row=>row[2]))].sort((a,b)=>a-b);
+  if(S.kel<0||!rws.includes(S.rw))S.rw=S.rt=-1;
+  const rts=[...new Set(parent.filter(row=>row[2]===S.rw).map(row=>row[3]))].sort((a,b)=>a-b);
+  if(S.rw<0||!rts.includes(S.rt))S.rt=-1;
+  const neighborhood=(kind,value)=>value?kind+' '+String(value).padStart(3,'0'):kind+' tidak tercatat';
+  const select=(key,label,items,selected,disabled=false)=>`<label class="field potential-${key}">${label}<input id="potential-${key}" list="potential-options-${key}" type="text" autocomplete="off" aria-label="${label} potensi" placeholder="Pilih ${label.toLowerCase()}" value="${esc(items.find(item=>item.value===selected)?.label||'')}"${disabled?' disabled':''}><datalist id="potential-options-${key}">${items.map(item=>`<option value="${esc(item.label)}" data-value="${esc(item.value)}"></option>`).join('')}</datalist></label>`;
+  const regions=[{value:'',label:'Semua regional'},...[...new Set(D.reg)].sort().map(name=>({value:name,label:name}))],
+    areas=[{value:-1,label:'Semua area bisnis'},...D.abs.flatMap((name,i)=>!S.reg||D.reg[i]===S.reg?[{value:i,label:!S.reg&&D.abs.filter(value=>value===name).length>1?name+' · '+D.reg[i]:name}]:[])],
+    kelIds=[...new Set(D.P.filter(row=>(!S.reg||D.reg[row[0]]===S.reg)&&(S.ab<0||row[0]===S.ab)).map(row=>row[1]))],
+    kels=[{value:-1,label:'Semua kelurahan'},...kelIds.sort((a,b)=>D.kels[a].localeCompare(D.kels[b],'id')).map(i=>({value:i,label:D.kels[i]}))],
+    rwOptions=[{value:-1,label:'Semua RW'},...rws.map(value=>({value,label:neighborhood('RW',value)}))],
+    rtOptions=[{value:-1,label:'Semua RT'},...rts.map(value=>({value,label:neighborhood('RT',value)}))];
+  const selected=RPDPotential.rows(D,S),totals=RPDPotential.total(selected),grouped=RPDPotential.groups(D,S),
+    drill=(row,label)=>`<button data-field-drill="${grouped.level}" data-field-ab="${row.ab}" data-field-kel="${row.kel}" data-field-rw="${row.rw}" data-field-rt="${row.rt}">${esc(label)}</button>`;
+  const headers=[...(grouped.level==='kel'?['Kelurahan','Area Bisnis']:[]),'RW','RT','Potensi','Canvassing','Berminat','Terpasang','Sisa'];
+  const cells=grouped.rows.map(row=>[
+    ...(grouped.level==='kel'?[drill(row,D.kels[row.kel]),esc(D.abs[row.ab])]:[]),
+    grouped.level==='kel'?'–':grouped.level==='rw'?drill(row,neighborhood('RW',row.rw)):esc(neighborhood('RW',row.rw)),
+    grouped.level==='rt'?drill(row,neighborhood('RT',row.rt)):'Semua RT',
+    ...['potential','canvassed','interested','installed','remaining'].map(key=>row[key]==null?'Belum tersedia':N(row[key]))]);
+  return `<section class="potential-panel"><div class="section-heading"><h2>Cek Potensi Wilayah</h2><span class="report-badge">Stok master · seluruh periode</span></div><div class="potential-filters"><details class="potential-context"${S.kel<0||!matchMedia('(max-width:600px)').matches?' open':''}><summary>${S.kel>=0?esc(D.kels[S.kel])+' · Ubah Wilayah':'Pilih Wilayah'}</summary><div class="potential-context-fields">`+
+    select('reg','Regional',regions,S.reg)+select('ab','Area Bisnis',areas,S.ab)+select('kel','Kelurahan',kels,S.kel,S.ab<0)+'</div></details><div class="potential-neighborhood">'+
+    select('rw','RW',rwOptions,S.rw,S.kel<0)+select('rt','RT',rtOptions,S.rt,S.rw<0)+'<button id="reset-potential" type="button">Reset Filter</button></div></div>'+
+    '<div class="intel-kpis potential-kpis">'+[['potential','Total Potensi'],['canvassed','Tercanvassing'],['interested','Berminat'],['installed','Terpasang'],['remaining','Sisa Potensi']].map(([key,label])=>`<article class="intel-card"><span class="metric-label">${label}</span><strong class="metric-value${totals[key]==null?' unavailable':''}">${totals[key]==null?'Belum tersedia':N(totals[key])}</strong></article>`).join('')+'</div>'+
+    '<p class="scope-caption">Tercanvassing: potensi master yang tercatat di survei. Sisa = Potensi − Berminat. Filter periode, tim dan status tidak mengubah stok ini.</p>'+
+    `<div class="potential-table">${dataTable(headers,cells,'Tidak ada potensi pada wilayah ini.')}</div></section>`;
 }
 
 function vTeam() {
   const rows=[...A.teams].sort((a,b)=>(b.interested_per_observed_day??-1)-(a.interested_per_observed_day??-1));
   return `<h2>Kinerja Koordinator</h2>${notice('Hari-surveyor teramati = pasangan surveyor + tanggal dengan baris survei valid. Ini bukan absensi atau hari kerja berbayar. Perbandingan belum menyesuaikan beban kerja/kondisi area; target tim dan atribusi lintas tim yang ambigu tidak diasumsikan.')}`+
-  dataTable(['Koordinator / tim','Surveyor beraktivitas','Status aktif¹','Tercanvassing','Berminat','Terpasang²','Konversi minat','Hari-surveyor teramati','Minat / hari teramati'],rows.map(row=>[`${esc(LB[row.name]||row.name)}${ROLE==='owner'?`<details><summary>Surveyor terotorisasi</summary>${row.individuals.map(person=>`<p>${esc(person.name)} · ${N(person.canvassed)} Tercanvassing · ${N(person.interested)} minat · ${N(person.installed)} Done</p>`).join('')}</details>`:''}`,N(row.surveyors_with_activity),N(row.active_surveyors),N(row.canvassed),N(row.interested),N(row.installed),percent(row.interest_rate),N(row.observed_surveyor_days),row.interested_per_observed_day==null?unavailable:row.interested_per_observed_day.toFixed(2)]))+
+  dataTable(['Koordinator / tim','Surveyor beraktivitas','Status aktif¹','Tercanvassing','Berminat','Terpasang²','Konversi minat','Hari-surveyor teramati','Minat / hari teramati'],rows.map(row=>[`${esc(LB[row.name]||row.name)}${CAP.customer_detail?`<details><summary>Surveyor</summary>${(row.individuals||[]).map(person=>`<p>${esc(person.name)} · ${N(person.canvassed)} Tercanvassing · ${N(person.interested)} minat · ${N(person.installed)} Done</p>`).join('')}</details>`:''}`,N(row.surveyors_with_activity),N(row.active_surveyors),N(row.canvassed),N(row.interested),N(row.installed),percent(row.interest_rate),N(row.observed_surveyor_days),row.interested_per_observed_day==null?unavailable:row.interested_per_observed_day.toFixed(2)]))+
   `<p class="footer-definition">¹ Status pemetaan sumber/override, bukan absensi. ² Atribusi mengikuti surveyor dalam baris survei, bukan penanggung jawab pemasangan. Pelanggan lintas tim dapat muncul pada beberapa tim; subtotal tidak selalu aditif.</p>`+
-  `<details class="legacy-report"><summary>Laporan koordinator asli &amp; pemetaan surveyor</summary>${notice('Laporan asli mengikuti bulan survei, regional dan area saja; filter lanjutan tidak berlaku. PDF lama berisi SEMUA surveyor, tanpa filter dan hanya administrator.',true)}${vKorlap()}</details>`;
+  (ROLE==='owner'?`<details class="legacy-report"><summary>Laporan koordinator asli &amp; pemetaan surveyor</summary>${notice('Laporan asli mengikuti bulan survei, regional dan area saja; filter lanjutan tidak berlaku. PDF lama berisi SEMUA surveyor, tanpa filter dan hanya administrator.',true)}${vKorlap()}</details>`:'');
 }
 
 function vOutstanding() {
@@ -285,7 +322,7 @@ function render() {
   if(!A){$('#main').innerHTML=skeleton();return}
   $('#main').innerHTML=({ringkasan:vExecutive,analytics:vAnalytics,kelurahan:vRegional,korlap:vTeam,outstanding:vOutstanding,data:vData,catatan:vGovernance})[S.tab]();
   renderedTab=S.tab;document.querySelectorAll('#main .legacy-report').forEach((panel,index)=>{const key=S.tab+':'+(panel.id||index);if(legacyPanels.has(key))panel.open=legacyPanels.get(key)});if(ROLE!=='owner')$('#pdf')?.remove();
-  if(S.tab==='kelurahan'&&ROLE==='owner')kt();if(['data','outstanding'].includes(S.tab))dt();if(S.tab==='catatan')loadGovernance(revision);
+  if(S.tab==='kelurahan'&&CAP.customer_detail)kt();if(['data','outstanding'].includes(S.tab))dt();if(S.tab==='catatan')loadGovernance(revision);
   if(S.tab==='catatan')window.RPDStatic?.ready(ROLE,BOOT);
   document.querySelectorAll('th[data-i]').forEach(cell=>{cell.tabIndex=0;cell.setAttribute('role','button');cell.setAttribute('aria-label','Urutkan '+cell.textContent.trim())});
   const reports={ringkasan:'executive',analytics:'executive',kelurahan:'area',korlap:'team',outstanding:'outstanding'};if(reports[S.tab])$('#report-kind').value=reports[S.tab];
@@ -300,6 +337,11 @@ async function openCase(index,trigger) {
   CASE=CURRENT_ROWS[index];if(!CASE)return;caseReturnFocus=trigger;
   let dialog=$('#case-dialog');if(!dialog){dialog=document.createElement('dialog');dialog.id='case-dialog';dialog.setAttribute('aria-labelledby','case-title');document.body.appendChild(dialog);dialog.addEventListener('close',()=>{const ref=CASE?.ref;CASE=null;if(!D)return;const index=CURRENT_ROWS.findIndex(row=>row.ref===ref),replacement=index>=0?document.querySelector(`#main [data-case="${index}"]`):null;if(caseReturnFocus?.isConnected)caseReturnFocus.focus();else if(replacement)replacement.focus();else $('#main').focus({preventScroll:true})})}
   const row=CASE,latest=row.followup||{};
+  if(ROLE!=='owner'){
+    dialog.innerHTML=`<div class="dialog-header"><h2 id="case-title">PAM ${esc(row.pam)}</h2><button id="close-case" aria-label="Tutup detail kasus">Tutup</button></div><div class="dialog-content"><p class="scope-caption">Guest internal · Hanya baca</p><dl class="case-readonly">`+
+      [['Regional',row.regional],['Area Bisnis',row.area],['Kelurahan',row.kelurahan],['Surveyor',row.surveyor],['Status sumber',row.status],['Tunggakan (Rp)',number(row.arrears)]].map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value||'–')}</dd></div>`).join('')+'</dl><h2>Riwayat tindakan</h2><div id="case-history"></div></div>';
+    dialog.showModal();await loadCaseHistory(row.ref);return;
+  }
   dialog.innerHTML=`<div class="dialog-header"><h2 id="case-title">PAM ${esc(row.pam)} · follow-up</h2><button id="close-case" aria-label="Tutup detail kasus">Tutup</button></div><div class="dialog-content"><p class="mu sm">${esc(row.ref)} · ${esc(row.area)} · status sumber ${esc(row.status)}</p><form id="followup-form" class="admin-form"><label class="field">PIC penanggung jawab<input name="pic" maxlength="150" value="${esc(latest.pic||row.coordinator)}" required></label><label class="field">Status tindak lanjut (terpisah)<select name="status">${D.dic.kf.filter(Boolean).concat(D.dic.kf.includes('Tidak tercatat')?[]:['Tidak tercatat']).map(status=>option(status,status,status===(latest.status||row.status))).join('')}</select></label><label class="field">Target selesai<input name="target_date" type="date" value="${esc(latest.target_date||'')}"></label><label class="field wide">Aksi tindak lanjut<textarea name="action" maxlength="2000" required></textarea></label><label class="field wide">Catatan resolusi<textarea name="resolution_notes" maxlength="2000">${esc(latest.resolution_notes||'')}</textarea></label><label class="field">Awal kasus terkonfirmasi<input name="case_started" type="date" value="${esc(latest.case_started||'')}" max="${new Date().toISOString().slice(0,10)}"></label><label class="field">Total hari jeda terverifikasi<input name="pause_days" type="number" min="0" max="36500" value="${latest.pause_days||0}"></label><label class="field">Alasan jeda<input name="pause_reason" maxlength="500" value="${esc(latest.pause_reason||'')}"></label><button>Tambahkan ke riwayat</button><p class="form-status" role="status"></p></form><p class="mu sm">Awal kasus dan jeda memerlukan bukti operasional. Tidak diambil otomatis dari tanggal survei. Aksi baru tidak menghapus aksi sebelumnya.</p><h2>Riwayat tindakan</h2><div id="case-history">${skeleton()}</div></div>`;
   dialog.showModal();await loadCaseHistory(row.ref);
 }
@@ -311,6 +353,7 @@ async function loadCaseHistory(ref,before=null) {
 
 document.addEventListener('submit',async event=>{
   const form=event.target;if(!['followup-form','target-form','rules-form','context-form'].includes(form.id))return;event.preventDefault();const button=form.querySelector('button'),status=form.querySelector('.form-status');button.disabled=true;status.textContent='Menyimpan…';
+  if(ROLE!=='owner'){status.textContent='Guest hanya dapat membaca.';button.disabled=false;return}
   const values=Object.fromEntries(new FormData(form)),ref=CASE?.ref;let path,method='POST';
   if(form.id==='followup-form'){path='/api/followups/'+encodeURIComponent(ref);for(const key of ['case_started','target_date'])values[key]=values[key]||null;values.pause_days=+values.pause_days}
   if(form.id==='target-form'){path='/api/admin/targets';values.target=+values.target;values.region=S.reg;values.area=S.ab}
@@ -324,6 +367,7 @@ document.addEventListener('submit',async event=>{
 
 document.addEventListener('input',event=>{
   const target=event.target;if(target.id==='filter-search'){fill();return}
+  if(target.id.startsWith('potential-')){target.setCustomValidity('');return}
   if(target.id==='case-search'){S.dq.query=target.value=target.value.slice(0,150);PAGE=0;clearTimeout(searchTimer);searchRevision++;searchTimer=setTimeout(dt,300);return}
   if(target.dataset.gridSearch){const id=target.dataset.gridSearch,state=gridStates.get(id);state.q=target.value;state.page=0;const pos=target.selectionStart;updateGrid(id);const field=document.querySelector('[data-grid-search="'+id+'"]');field?.focus();field?.setSelectionRange(pos,pos);return}
   if(target.id==='q'){S.q=target.value;S.all=0;kt()}
@@ -332,6 +376,15 @@ document.addEventListener('input',event=>{
 
 document.addEventListener('change',async event=>{
   const target=event.target;
+  if(target.id.startsWith('potential-')){
+    const key=target.id.slice(10),match=[...target.list.options].find(option=>option.value.toLocaleLowerCase('id')===target.value.trim().toLocaleLowerCase('id'));
+    if(!match){target.setCustomValidity('Pilih wilayah dari daftar.');target.reportValidity();return}
+    const order=['reg','ab','kel','rw','rt'],index=order.indexOf(key);if(index<0)return;
+    S[key]=key==='reg'?match.dataset.value:Number(match.dataset.value);
+    for(const child of order.slice(index+1))S[child]=-1;
+    if(key==='ab'&&S.ab>=0)S.reg=D.reg[S.ab];S.coordinator='';
+    gridStates.clear();await refresh();document.getElementById(key==='kel'&&S.kel>=0?'potential-rw':target.id)?.focus({preventScroll:true});return;
+  }
   if(target.id==='fperiod'){
     const kind=target.value;if(kind==='custom'){$('#extra-filters').open=true;return}
     const now=new Date(),local=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
@@ -340,9 +393,9 @@ document.addEventListener('change',async event=>{
     refresh();return;
   }
   if(target.id==='f0'||target.id==='f1'){S[target.id==='f0'?'m0':'m1']=+target.value;if(S.m0>S.m1){if(target.id==='f0')S.m1=S.m0;else S.m0=S.m1}S.start=S.end='';refresh()}
-  else if(target.id==='fr'){S.reg=target.value;S.ab=S.kel=-1;S.coordinator='';refresh()}
-  else if(target.id==='fa'){S.ab=+target.value;if(S.ab>=0)S.reg=D.reg[S.ab];S.kel=-1;S.coordinator='';refresh()}
-  else if(target.id==='fk'){S.kel=+target.value;refresh()}
+  else if(target.id==='fr'){S.reg=target.value;S.ab=S.kel=S.rw=S.rt=-1;S.coordinator='';refresh()}
+  else if(target.id==='fa'){S.ab=+target.value;if(S.ab>=0)S.reg=D.reg[S.ab];S.kel=S.rw=S.rt=-1;S.coordinator='';refresh()}
+  else if(target.id==='fk'){S.kel=+target.value;S.rw=S.rt=-1;refresh()}
   else if(target.id==='fco'){S.coordinator=target.value;refresh()}
   else if(target.id==='fstatus'){S.statuses=[...target.selectedOptions].map(item=>item.value);refresh()}
   else if(target.id==='fstart'||target.id==='fend'){S[target.id==='fstart'?'start':'end']=target.value;refresh()}
@@ -354,19 +407,25 @@ document.addEventListener('change',async event=>{
 
 document.addEventListener('click',async event=>{
   const target=event.target.closest('button,th[data-i],tr[data-k]');if(!target)return;
+  if(target.dataset.fieldDrill){
+    const level=target.dataset.fieldDrill;S.ab=Number(target.dataset.fieldAb);S.reg=D.reg[S.ab];S.kel=Number(target.dataset.fieldKel);
+    S.rw=level==='kel'?-1:Number(target.dataset.fieldRw);S.rt=level==='rt'?Number(target.dataset.fieldRt):-1;
+    gridStates.clear();await refresh();return;
+  }
+  if(target.id==='reset-potential'){Object.assign(S,{reg:'',ab:-1,kel:-1,rw:-1,rt:-1,coordinator:''});gridStates.clear();refresh();return}
   if(target.dataset.caseSort){const q=S.dq;q.descending=q.sort===target.dataset.caseSort?!q.descending:false;q.sort=target.dataset.caseSort;PAGE=0;dt();return}
   if(target.dataset.gridSort){const id=target.dataset.gridSort,state=gridStates.get(id),col=+target.dataset.column;state.direction=state.col===col?-state.direction:1;state.col=col;state.page=0;updateGrid(id);return}
   if(target.dataset.gridPage){const id=target.dataset.gridPage;gridStates.get(id).page+=+target.dataset.step;updateGrid(id);return}
   const route=target.dataset.tab||target.dataset.route;
-  if(route){if(ROLE!=='owner'&&!['ringkasan','kelurahan'].includes(route))return;S.tab=route==='analytics'?'kelurahan':route;S.all=0;PAGE=0;setStatus('');refresh();revealSelectedTab();if(target.dataset.route)$('#main').focus({preventScroll:true});return}
+  if(route){if((route==='catatan'&&ROLE!=='owner')||(!CAP.customer_detail&&!['ringkasan','kelurahan'].includes(route)))return;S.tab=route==='analytics'?'kelurahan':route;S.all=0;PAGE=0;setStatus('');refresh();revealSelectedTab();if(target.dataset.route)$('#main').focus({preventScroll:true});return}
   if(target.id==='retry-analysis'){refresh();return}
   if(target.dataset.export){const buttons=[...document.querySelectorAll('[data-export]')];buttons.forEach(button=>button.disabled=true);setStatus('');try{const extension=target.dataset.export,kind=$('#report-kind').value;await download('/api/reports/'+kind+'.'+extension+'?'+params(),'RPD-'+kind+'.'+extension)}catch(error){setStatus(error.message)}finally{buttons.forEach(button=>button.disabled=false)}return}
-  if(target.id==='rs'){gridStates.clear();Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,coordinator:'',statuses:[],start:'',end:'',q:'',open:'',openK:null,all:0,dq:{p:'',k:'',s:'',c:0,r:0,f:0,n:100}});$('#filter-search').value='';$('#fperiod').value='all';refresh();return}
+  if(target.id==='rs'){gridStates.clear();Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,rw:-1,rt:-1,coordinator:'',statuses:[],start:'',end:'',q:'',open:'',openK:null,all:0,dq:{p:'',k:'',s:'',c:0,r:0,f:0,n:100}});$('#filter-search').value='';$('#fperiod').value='all';refresh();return}
   if(target.id==='save-preset'){const name=$('#preset-name').value.trim();if(!name){setStatus('Masukkan nama preset.');return}const presets=presetList();Object.defineProperty(presets,name,{value:presetScope(),enumerable:true,writable:true,configurable:true});savePresetList(presets);fill();setStatus('Preset filter disimpan tanpa data pelanggan.');return}
   if(target.id==='load-preset'){const value=presetList()[$('#preset-list').value];if(!value)return;const scope=resolvePreset(value);if(!scope){setStatus('Cakupan preset lama tidak dapat diverifikasi pada sumber aktif. Simpan ulang preset; filter tidak diubah.');return}Object.assign(S,scope);refresh();return}
   if(target.id==='delete-preset'){const presets=presetList();delete presets[$('#preset-list').value];savePresetList(presets);fill();return}
-  if(target.dataset.region!==undefined){S.reg=target.dataset.region;S.ab=S.kel=-1;S.coordinator='';refresh();return}
-  if(target.dataset.area!==undefined){S.ab=+target.dataset.area;S.reg=D.reg[S.ab];S.kel=-1;S.coordinator='';refresh();return}
+  if(target.dataset.region!==undefined){S.reg=target.dataset.region;S.ab=S.kel=S.rw=S.rt=-1;S.coordinator='';refresh();return}
+  if(target.dataset.area!==undefined){S.ab=+target.dataset.area;S.reg=D.reg[S.ab];S.kel=S.rw=S.rt=-1;S.coordinator='';refresh();return}
   if(target.id==='page-prev'||target.id==='page-next'){PAGE+=target.id==='page-next'?1:-1;dt();return}
   if(target.dataset.case!==undefined){await openCase(+target.dataset.case,target);return}
   if(target.id==='close-case'){$('#case-dialog').close();return}

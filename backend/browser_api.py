@@ -63,10 +63,11 @@ def text(body,key,maximum,required=False,default=''):
 
 
 class BrowserAPI:
-    def __init__(self,source,role,actor,info,events=None):
+    def __init__(self,source,role,actor,info,events=None,operational_guest=False):
         self.data=source
         self.prepared=prepare(source)
         self.role=role
+        self.operational_guest=role=='guest' and operational_guest
         self.actor=actor
         self.info=info
         self.store=LocalEvents(events)
@@ -86,13 +87,13 @@ class BrowserAPI:
         source=self.data
         safe={key:source[key] for key in ('months','abs','reg','kels','svs','st','kl','A','S','E','P','W','dic')}
         safe['meta']={key:source['meta'].get(key,[] if key=='korlaps' else {} if key=='sync' else 0) for key in ('tmin','tmax','rows','uniq','sync','korlaps','rt_bad')}
-        if self.role!='owner':
+        if self.role!='owner' and not self.operational_guest:
             safe['svs']=[f'Surveyor {index+1}' for index in range(len(source['svs']))]
         mapping=self.store.history('mapping','all',1)
         overrides=mapping[0]['payload'] if mapping else {}
         pairs={(row['ab'],row['kel']) for row in self.prepared['rows'] if row['valid_location']}
         pairs.update((row[0],row[1]) for row in [*source['P'],*source['W']] if len(row)>=2 and type(row[0]) is int and type(row[1]) is int and 0<=row[0]<len(source['abs']) and 0<=row[1]<len(source['kels']))
-        return dict(data=safe,role=self.role,csrf='',overrides={str(index):overrides[name] for index,name in enumerate(source['svs']) if name in overrides},mapping_version=mapping[0]['id'] if mapping else 0,geography=sorted(pairs),area_keys=[area_key(source,index) for index in range(len(source['abs']))],data_owner=self.info.get('owner',''),source=self.info,capabilities=dict(customer_detail=self.role=='owner',attendance=False,geographic_boundaries=False,historical_snapshots=False,browser_only=True))
+        return dict(data=safe,role=self.role,csrf='',overrides={str(index):overrides[name] for index,name in enumerate(source['svs']) if name in overrides},mapping_version=mapping[0]['id'] if mapping else 0,geography=sorted(pairs),area_keys=[area_key(source,index) for index in range(len(source['abs']))],data_owner=self.info.get('owner',''),source=self.info,capabilities=dict(customer_detail=self.role=='owner' or self.operational_guest,attendance=False,geographic_boundaries=False,historical_snapshots=False,browser_only=True,details_loaded=True))
 
     def request(self,path,method='GET',body=None):
         body=body or {}
@@ -101,24 +102,29 @@ class BrowserAPI:
         raw={key:values[-1] for key,values in query.items()}
         raw['statuses']=query.get('status',[])
         route=url.path
+        # Defense in depth for this local adapter, NOT trusted server authorization.
+        if self.role!='owner' and (route.startswith('/api/admin/') or route=='/api/quality' or
+                                  method!='GET' and route!='/api/records/search'):
+            raise ValueError('Akses Admin diperlukan; Guest hanya dapat membaca.')
+        view_role='owner' if self.operational_guest else self.role
         expected={'/api/records/search':'POST','/api/admin/mappings':'PUT','/api/admin/rules':'PUT','/api/admin/targets':'POST','/api/admin/area-context':'POST'}
         allowed=('GET','POST') if route.startswith('/api/followups/') else (expected.get(route,'GET'),)
         if method not in allowed: raise ValueError('Invalid local request method')
         if route=='/api/bootstrap': return self.bootstrap()
-        if route=='/api/analysis': return build_analysis(self.data,self.prepared,self.scope(raw),self.store,self.role)
+        if route=='/api/analysis': return build_analysis(self.data,self.prepared,self.scope(raw),self.store,view_role)
         if route=='/api/quality': return {**quality(self.data,self.prepared),'source':self.info}
         if route.startswith('/api/reports/'):
             kind,extension=route.rsplit('/',1)[-1].rsplit('.',1)
             if kind not in TITLES or extension not in ('csv','xlsx','pdf'): raise ValueError('Unknown report')
             filters=self.scope(raw)
-            analysis=build_analysis(self.data,self.prepared,filters,self.store,self.role)
+            analysis=build_analysis(self.data,self.prepared,filters,self.store,view_role)
             info={**self.info,'imported_at':None}
             if extension=='pdf':
-                headers,rows,metadata=report_content(kind,extension,analysis,self.data,self.prepared,filters,self.store,self.role,info)
+                headers,rows,metadata=report_content(kind,extension,analysis,self.data,self.prepared,filters,self.store,view_role,info)
                 return {'pdf_model':dict(headers=headers,rows=rows,metadata=metadata)}
-            content,media=make_report(kind,extension,analysis,self.data,self.prepared,filters,self.store,self.role,info)
+            content,media=make_report(kind,extension,analysis,self.data,self.prepared,filters,self.store,view_role,info)
             return {'binary':base64.b64encode(content).decode(),'media_type':media}
-        if self.role!='owner': raise ValueError('View unavailable in this presentation role. Browser roles are not server authorization.')
+        if self.role!='owner' and not self.operational_guest: raise ValueError('View unavailable in this presentation role. Browser roles are not server authorization.')
         source,prepared,store=self.data,self.prepared,self.store
         if route=='/api/legacy-report.pdf':
             if not source.get('pdf'): raise ValueError('Legacy PDF unavailable')

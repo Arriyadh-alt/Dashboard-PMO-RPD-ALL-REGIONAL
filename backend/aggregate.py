@@ -9,8 +9,8 @@ from collections import defaultdict
 from .analytics import area_key, prepare
 
 
-def project(data):
-    prepared = prepare(data)
+def project(data, prepared=None):
+    prepared = prepared or prepare(data)
     seen, daily, installed = set(), defaultdict(lambda: [0, 0, 0, 0]), defaultdict(int)
     dates = []
     for row in prepared['rows']:
