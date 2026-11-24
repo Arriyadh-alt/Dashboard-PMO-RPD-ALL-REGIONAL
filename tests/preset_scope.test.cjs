@@ -56,6 +56,16 @@ test('removed geography and unverifiable older presets are rejected',()=>{
   assert.equal(context.resolvePreset({scope:context.S}),null);
 });
 
+test('operational presets load their validation dictionaries only when explicitly applied',async()=>{
+  const context=fixture(0),saved=context.presetScope();
+  saved.scope.coordinator='Fixture Team';saved.scope.statuses=['Done'];context.D.dic.kf=[];
+  let loads=0;context.ensureOperationalData=async()=>{loads++;context.D.S=[[0,0,0,'Fixture Team']];context.D.dic.kf=['Done']};
+  assert.equal(context.resolvePreset(saved),null);
+  const scope=await context.resolvePresetForUse(saved);
+  assert.equal(loads,1);assert.equal(scope.coordinator,'Fixture Team');assert.equal(scope.statuses[0],'Done');
+  await context.resolvePresetForUse(context.presetScope());assert.equal(loads,1,'geographic/date-only presets need no operational download');
+});
+
 function legacyOverview(filters={}){
   const context={input:{months:['2026-10','2026-11'],abs:['A','B'],reg:['West','East'],
     A:[[0,0,1,1,0,0,0,0,0,1,0,0],[0,1,1,0,1,0,0,0,0,0,0,0]],

@@ -71,15 +71,19 @@ async function go() {
   finally{$('#lp').value='';$('#login-form').setAttribute('aria-busy','false')}
 }
 
+async function ensureOperationalData(){
+  if(!window.RPDStatic||!CAP.customer_detail||CAP.details_loaded)return;
+  const loaded=await api('/api/bootstrap?details=1');if(!D)return;
+  D=loaded.data;BOOT=loaded;CAP=loaded.capabilities;OV=loaded.overrides;WM=null;fill();
+}
+
 async function refresh() {
   if(!D)return;rememberLegacyPanel();const revision=++analysisRevision;viewRevision++;searchRevision++;A=null;PAGE=0;setStatus('');fill();
   $('#main').setAttribute('aria-busy','true');$('#main').innerHTML=skeleton();
   try{sessionStorage.setItem('rpd_session_scope',JSON.stringify(presetScope()))}catch{}
   try {
-    if(window.RPDStatic&&CAP.customer_detail&&S.tab!=='ringkasan'&&!CAP.details_loaded){
-      const loaded=await api('/api/bootstrap?details=1');if(revision!==analysisRevision||!D)return;
-      D=loaded.data;BOOT=loaded;CAP=loaded.capabilities;OV=loaded.overrides;WM=null;fill();
-    }
+    if(S.tab!=='ringkasan'||S.coordinator||S.statuses.length)await ensureOperationalData();
+    if(revision!==analysisRevision||!D)return;
     const result=await api('/api/analysis?'+params()+'&view='+encodeURIComponent(S.tab==='kelurahan'&&S.advanced?'details':S.tab));if(revision!==analysisRevision||!D)return;A=result;render();performance.mark('rpd:usable')}
   catch(error){if(revision!==analysisRevision)return;setStatus(error.message);$('#main').innerHTML=blank('Laporan belum tersedia','Ubah filter atau coba kembali. Tidak ada hasil lama yang ditampilkan sebagai hasil filter baru.')+'<p><button id="retry-analysis">Coba kembali</button></p>'}
   finally{if(revision===analysisRevision)$('#main').setAttribute('aria-busy','false')}
@@ -108,6 +112,13 @@ function resolvePreset(value){
   if(!Array.isArray(scope.statuses)||scope.statuses.some(status=>!D.dic.kf.includes(status)))return null;
   const neighborhood=key=>Number.isInteger(value.field?.[key])&&value.field[key]>=0&&value.field[key]<=999?value.field[key]:-1;
   return {m0,m1,reg,ab,kel:value.kelName===null?-1:kelIds[0],rw:neighborhood('rw'),rt:neighborhood('rt'),coordinator,statuses:scope.statuses,start:scope.start||'',end:scope.end||''};
+}
+
+async function resolvePresetForUse(value){
+  // Operational names/statuses are intentionally absent from the login overview.
+  // Load them only after an explicit request, then validate against the active source.
+  if(value?.scope?.coordinator||value?.scope?.statuses?.length)await ensureOperationalData();
+  return resolvePreset(value);
 }
 
 function fill() {
@@ -422,7 +433,7 @@ document.addEventListener('click',async event=>{
   if(target.dataset.export){const buttons=[...document.querySelectorAll('[data-export]')];buttons.forEach(button=>button.disabled=true);setStatus('');try{const extension=target.dataset.export,kind=$('#report-kind').value;await download('/api/reports/'+kind+'.'+extension+'?'+params(),'RPD-'+kind+'.'+extension)}catch(error){setStatus(error.message)}finally{buttons.forEach(button=>button.disabled=false)}return}
   if(target.id==='rs'){gridStates.clear();Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,rw:-1,rt:-1,coordinator:'',statuses:[],start:'',end:'',q:'',open:'',openK:null,all:0,dq:{p:'',k:'',s:'',c:0,r:0,f:0,n:100}});$('#filter-search').value='';$('#fperiod').value='all';refresh();return}
   if(target.id==='save-preset'){const name=$('#preset-name').value.trim();if(!name){setStatus('Masukkan nama preset.');return}const presets=presetList();Object.defineProperty(presets,name,{value:presetScope(),enumerable:true,writable:true,configurable:true});savePresetList(presets);fill();setStatus('Preset filter disimpan tanpa data pelanggan.');return}
-  if(target.id==='load-preset'){const value=presetList()[$('#preset-list').value];if(!value)return;const scope=resolvePreset(value);if(!scope){setStatus('Cakupan preset lama tidak dapat diverifikasi pada sumber aktif. Simpan ulang preset; filter tidak diubah.');return}Object.assign(S,scope);refresh();return}
+  if(target.id==='load-preset'){const value=presetList()[$('#preset-list').value];if(!value)return;const revision=analysisRevision;try{setStatus('Memeriksa filter tersimpan…');const scope=await resolvePresetForUse(value);if(revision!==analysisRevision||!D)return;if(!scope){setStatus('Cakupan preset lama tidak dapat diverifikasi pada sumber aktif. Simpan ulang preset; filter tidak diubah.');return}Object.assign(S,scope);refresh()}catch(error){if(D)setStatus(error.message)}return}
   if(target.id==='delete-preset'){const presets=presetList();delete presets[$('#preset-list').value];savePresetList(presets);fill();return}
   if(target.dataset.region!==undefined){S.reg=target.dataset.region;S.ab=S.kel=S.rw=S.rt=-1;S.coordinator='';refresh();return}
   if(target.dataset.area!==undefined){S.ab=+target.dataset.area;S.reg=D.reg[S.ab];S.kel=S.rw=S.rt=-1;S.coordinator='';refresh();return}
