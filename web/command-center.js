@@ -41,13 +41,13 @@ async function download(path, filename) {
 
 function init(payload) {
   BOOT=payload;D=payload.data;ROLE=payload.role;CSRF=payload.csrf;SOURCE=payload.source;CAP=payload.capabilities;OV=payload.overrides;WM=null;
-  Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,coordinator:'',statuses:[],start:'',end:'',tab:'ringkasan',q:'',open:'',all:0});
+  Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,coordinator:'',statuses:[],start:'',end:'',tab:'ringkasan',q:'',open:'',all:0,advanced:false});
   $('#lg').hidden=true;$('#app').hidden=false;$('#out').hidden=false;$('#role').textContent=ROLE==='owner'?'Admin':'Guest';
   $('#sub').textContent='Tanggal survei: '+fd(D.meta.tmin)+' – '+fd(D.meta.tmax);
   $('#tab-catatan').hidden=ROLE!=='owner';document.querySelector('.export-menu').hidden=ROLE!=='owner';
   for(const tab of ['korlap','outstanding','data'])$('#tab-'+tab).hidden=ROLE!=='owner';
   try{const saved=JSON.parse(sessionStorage.getItem('rpd_session_scope')||'null'),scope=resolvePreset(saved);if(scope)Object.assign(S,scope)}catch{}
-  $('#lp').value='';$('#li').value='';fill();refresh();$('#main').focus({preventScroll:true});
+  S.coordinator='';S.statuses=[];$('#lp').value='';$('#li').value='';refresh();$('#main').focus({preventScroll:true});
   window.RPDStatic?.ready(ROLE,BOOT);
 }
 
@@ -119,6 +119,7 @@ function fill() {
   $('#fco').innerHTML=option('','Semua koordinator / tim',!S.coordinator)+coordinators.map(name=>option(name,LB[name]||name,name===S.coordinator)).join('');
   $('#fstatus').innerHTML=D.dic.kf.filter(Boolean).map(status=>option(status,status,S.statuses.includes(status))).join('');
   $('#fstart').value=S.start;$('#fend').value=S.end;
+  $('#fperiod').value=S.start||S.end||S.m0||S.m1!==D.months.length-1?'custom':'all';
   const selectedPreset=$('#preset-list').value;$('#preset-list').innerHTML=option('','Pilih preset',!selectedPreset)+Object.keys(presetList()).map(name=>option(name,name,name===selectedPreset)).join('');
   const active=[];if(S.reg)active.push(S.reg);if(S.ab>=0)active.push(D.abs[S.ab]);if(S.kel>=0)active.push(D.kels[S.kel]);if(S.coordinator)active.push(S.coordinator);active.push(...S.statuses);if(S.start||S.end)active.push((S.start||'awal sumber')+' → '+(S.end||'akhir bulan'));
   $('#active-filters').innerHTML=(active.length?active:['Seluruh cakupan operasional']).map(text=>`<span class="chip">${esc(text)}</span>`).join('');
