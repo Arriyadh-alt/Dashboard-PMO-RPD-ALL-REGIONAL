@@ -1,5 +1,5 @@
 /* Self-hosted Python/WASM worker: the reviewed analytics, not a second implementation. */
-await import('./summary.js?v='+encodeURIComponent(new URL(self.location.href).searchParams.get('summary')||''));
+const summaryReady=import('./summary.js?v='+encodeURIComponent(new URL(self.location.href).searchParams.get('summary')||''));
 let python=null,reportReady=false,chain=Promise.resolve(),initial=null,sourceObject=null,summary=null,bootstrapCache=null,pythonReady=false;
 const base=new URL('.',self.location.href),version=new URL(self.location.href).searchParams.get('engine')||'';
 const progress=()=>self.postMessage({progress:'Menyiapkan laporan di perangkat ini…'});
@@ -51,6 +51,7 @@ async function reports(){
 
 async function process(message){
   try{
+    await summaryReady;
     if(message.type==='init'){
       initial={...message,source:new TextDecoder().decode(message.source)};
       const parsed=JSON.parse(initial.source);
