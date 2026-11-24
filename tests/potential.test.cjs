@@ -19,3 +19,15 @@ test('unknown RW/RT remain explicit and missing historical canvassing is not fab
   assert.equal(RPDPotential.total(RPDPotential.rows(old)).canvassed,null);
   assert.equal(RPDPotential.total(RPDPotential.rows(old)).remaining,7);
 });
+
+test('kelurahan/RW/RT selection preserves team and independent report filters',()=>{
+  const fs=require('node:fs'),vm=require('node:vm'),code=fs.readFileSync('web/command-center.js','utf8');
+  const context={S:{reg:'Barat',ab:0,kel:0,rw:1,rt:1,coordinator:'Fixture Team',statuses:['Done'],start:'2026-11-01'},D:{reg:['Barat','Timur']}};
+  vm.createContext(context);vm.runInContext(code.slice(code.indexOf('function selectPotentialScope('),code.indexOf('\nfunction potentialView(')),context);
+  for(const [key,value] of [['kel',1],['rw',2],['rt',3]]){
+    context.selectPotentialScope(key,value);
+    assert.equal(context.S.coordinator,'Fixture Team');assert.equal(context.S.statuses[0],'Done');assert.equal(context.S.start,'2026-11-01');
+  }
+  context.selectPotentialScope('rw',1);assert.equal(context.S.rt,-1);
+  context.selectPotentialScope('ab',1);assert.equal(context.S.reg,'Timur');assert.equal(context.S.coordinator,'');assert.equal(context.S.kel,-1);
+});

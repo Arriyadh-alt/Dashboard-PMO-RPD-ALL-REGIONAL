@@ -223,6 +223,14 @@ function vRegional() {
   '</details>'+(CAP.customer_detail?`<details class="legacy-report" id="area-details"${S.advanced?' open':''}><summary>Analisis Kinerja &amp; Prioritas Wilayah</summary>${S.advanced?vAnalytics()+dataTable(['Area Bisnis','Prioritas','Alasan'],A.areas.map(r=>[esc(r.name),esc(r.priority),esc(r.reason)])):''}</details><details class="legacy-report"><summary>Rincian Kelurahan, RW &amp; RT Sebelumnya</summary>${notice('Stok master seluruh periode; hanya filter regional dan area bisnis berlaku.')}${vKel()}</details>`:'');
 }
 
+function selectPotentialScope(key,value){
+  const order=['reg','ab','kel','rw','rt'],index=order.indexOf(key);if(index<0)return false;
+  S[key]=value;for(const child of order.slice(index+1))S[child]=-1;
+  if(key==='ab'&&S.ab>=0)S.reg=D.reg[S.ab];
+  if(index<2)S.coordinator='';
+  return true;
+}
+
 function potentialView(){
   const parent=D.W.filter(row=>RPDPotential.inArea(D,S,row)),rws=[...new Set(parent.map(row=>row[2]))].sort((a,b)=>a-b);
   if(S.kel<0||!rws.includes(S.rw))S.rw=S.rt=-1;
@@ -390,10 +398,7 @@ document.addEventListener('change',async event=>{
   if(target.id.startsWith('potential-')){
     const key=target.id.slice(10),match=[...target.list.options].find(option=>option.value.toLocaleLowerCase('id')===target.value.trim().toLocaleLowerCase('id'));
     if(!match){target.setCustomValidity('Pilih wilayah dari daftar.');target.reportValidity();return}
-    const order=['reg','ab','kel','rw','rt'],index=order.indexOf(key);if(index<0)return;
-    S[key]=key==='reg'?match.dataset.value:Number(match.dataset.value);
-    for(const child of order.slice(index+1))S[child]=-1;
-    if(key==='ab'&&S.ab>=0)S.reg=D.reg[S.ab];S.coordinator='';
+    if(!selectPotentialScope(key,key==='reg'?match.dataset.value:Number(match.dataset.value)))return;
     gridStates.clear();await refresh();document.getElementById(key==='kel'&&S.kel>=0?'potential-rw':target.id)?.focus({preventScroll:true});return;
   }
   if(target.id==='fperiod'){
