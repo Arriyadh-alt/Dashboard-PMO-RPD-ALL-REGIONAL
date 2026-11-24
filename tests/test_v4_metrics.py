@@ -106,6 +106,17 @@ def test_audit_rejects_stale_metadata_even_when_records_are_identical(field,valu
         reconcile(intake,data,aliases)
 
 
+def test_audit_preserves_geographic_discrepancies_without_trusting_cached_summary():
+    from scripts.reconcile_v4 import reconcile
+    baseline,intake=snapshot();baseline['kels'].append('OTHER KEL')
+    intake['master'][0]['kelurahan']='OTHER KEL'
+    aliases=bootstrap_aliases(baseline,intake)
+    data,_=convert(baseline,intake,aliases,full_snapshot=True)
+    result=reconcile(intake,data,aliases)
+    assert result['passed']
+    assert result['master_join']['normalized_geography_mismatches']=={'region':0,'area':0,'kelurahan':1}
+
+
 def test_xlsx_discovers_renamed_sheets_and_inserted_columns_and_drops_customer_notes(tmp_path):
     path=tmp_path/'Update Report RPD 23112026.xlsx'
     book=Workbook();book.remove(book.active)

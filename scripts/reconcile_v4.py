@@ -10,7 +10,7 @@ from pathlib import Path
 
 from backend.analytics import build_analysis, prepare
 from backend.browser_api import LocalEvents
-from scripts.workbook_intake import header, text, write_private
+from scripts.workbook_intake import header, text, write_private, reconcile as reconcile_ids
 
 
 def reconcile(intake, data, aliases, reference=None):
@@ -140,9 +140,7 @@ def reconcile(intake, data, aliases, reference=None):
     return {'source_sha256':intake['workbook_sha256'],'reporting_date':intake.get('reporting_date'),
         'survey_through':data['meta']['tmax'],'checks':checks,
         'passed':all(row['status']=='PASS' for row in checks),
-        'master_join':{'matched':len(by_id.keys()&master_by_id.keys()),
-            'survey_not_in_master':len(by_id.keys()-master_by_id.keys()),
-            'master_not_in_survey':len(master_by_id.keys()-by_id.keys())},
+        'master_join':reconcile_ids(survey,master),
         'unmapped_survey_rows':data['meta']['geographic_survey_unmapped'],
         'definitions':data['meta']['metric_definitions'],
         'active_potential':{'status':'UNVERIFIED','reason':'No separately approved definition; not invented.'}}
