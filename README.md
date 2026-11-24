@@ -38,7 +38,8 @@ suffixes. Header positions are audited; inserted columns are mapped by header.
 layout on subsequent refresh. Continue with `scripts.workbook_contract` using the
 authorized encrypted source, reviewed private roster aliases and `--full-snapshot`,
 then `scripts.publish_v3` and `scripts.build_pages --bundle-dir` as below. All
-plaintext remains outside this checkout. Invalid IDs, ambiguous duplicates,+inconsistent interest/status membership and unreconciled field cubes stop the
+plaintext remains outside this checkout. Invalid IDs, ambiguous duplicates,
+inconsistent interest/status membership and unreconciled field cubes stop the
 release; existing published files remain unchanged until an authorized PR merges.
 The original textual PAM display is retained separately from its normalized key.
 Customer admin-note/reason text is reduced to presence flags, not republished.

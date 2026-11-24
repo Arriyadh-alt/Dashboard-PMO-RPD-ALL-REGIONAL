@@ -1,6 +1,11 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 require('../web/potential.js');
 const source={reg:['Barat','Timur'],W:[[0,0,1,1,10,3,2,5],[0,0,1,2,20,4,1,8],[0,0,2,1,8,1,0,3],[0,1,1,1,4,1,0,2],[1,2,1,1,9,2,1,4],[0,0,0,0,2,0,0,0]]};
+test('V4 includes out-of-master interest but deducts only matched eligible interest',()=>{
+  const data={reg:['Barat'],W:[],G:[[0,0,1,1,3,2,1,1,1],[0,0,0,0,0,1,1,0,0]]};
+  assert.deepEqual(RPDPotential.total(RPDPotential.rows(data,{})),{potential:3,canvassed:3,interested:2,installed:1,remaining:2});
+  assert.equal(RPDPotential.total(RPDPotential.rows(data,{rw:0})).interested,1);
+});
 test('geographic hierarchy reconciles from regional stock down to individual RT',()=>{
   const expected={potential:40,interested:8,installed:3,canvassed:16,remaining:32};
   const scope={reg:'Barat',ab:0,kel:0,rw:-1,rt:-1};
