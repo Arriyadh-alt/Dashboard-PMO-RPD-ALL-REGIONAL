@@ -6,7 +6,7 @@
   "published_at": "2026-11-24T04:18:15+00:00",
   "ledger_salt": "Mujy8Q1njnm5he5deTK1FQ==",
   "owner": "",
-  "summary": "47df09c6aa28f63d10d33e9ff102bfdb084293217a7cac737137c2274ffea0f8",
+  "summary": "c9905db3d2b5658c8fdf21fb1838027974c98553f404d10a5c776b36d90c98f5",
   "guest_fingerprint": "6e2c218b8b5e75fe3422a6ebb82166c008d7e4dfff96cede2ab0fa31600d5568",
   "accounts": {
     "47b5845bcecb030f": {
@@ -33,5 +33,5 @@
   "guest_overview_fingerprint": "f86aa682dcc61cac21b9d8df56a35a7da0d084758a00d210c18b980334e56512",
   "guest_scope": "operational_readonly",
   "public_fingerprint": "e982133b25c125207b8007564044bea4efdea7c03c7e3ad8c7e74825c1155d83",
-  "engine": "3776cecc9c3a4a9d8783ad3e85aebbd16f4157ce4958347e282e1ae8ddf9f111"
+  "engine": "2a8ba21735e6f9104299208cedb9d1fc827772577048934cab9b8a2ce8eefaf0"
 }

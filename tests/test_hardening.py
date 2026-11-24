@@ -65,11 +65,11 @@ def test_import_history_keeps_each_rollback_event(tmp_path,encrypted_source):
 
 def test_outstanding_export_preserves_source_and_manual_resolution(signed):
     client,_=signed()
-    row=client.post('/api/records/search',json={'pam':'10000006'}).json()['rows'][0]
+    row=client.post('/api/records/search',json={'pam':'10000005'}).json()['rows'][0]
     assert client.post('/api/followups/'+row['ref'],json={'pic':'Verified PIC','status':'Done','action':'Closure verified','resolution_notes':'Fixture resolution'}).status_code==200
     parsed=list(csv.reader(StringIO(client.get('/api/reports/outstanding.csv').content.decode('utf-8-sig'))))
     header=next(index for index,values in enumerate(parsed) if values and values[0]=='Case reference')
     reports=[dict(zip(parsed[header],values)) for values in parsed[header+1:]]
     case=next(values for values in reports if values['Case reference']==row['ref'])
-    assert case['Source status']=='Assign FA' and case['Follow-up status']=='Done'
+    assert case['Source status']=='Outstanding' and case['Follow-up status']=='Done'
     assert case['Operational state']=='Resolved since import' and case['Resolution notes']=='Fixture resolution'

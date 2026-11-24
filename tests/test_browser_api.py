@@ -21,7 +21,7 @@ def test_case_search_and_sort_cover_all_pages_before_slicing():
     source['rec']['tg']=list(range(120))
     source['rec']['tg'][-1]=10000
     source['rec']['c1']=[source['dic']['c1'].index('Berminat')]*120
-    pending=next(i for i,name in enumerate(source['dic']['kf']) if name and name not in ('Done','Cancel'))
+    pending=source['dic']['kf'].index('Outstanding')
     source['rec']['kf']=[pending]*120
     app=BrowserAPI(source,'owner','synthetic-actor',{})
     first=app.request('/api/records/search','POST',dict(limit=50))
@@ -64,7 +64,9 @@ def test_local_history_mapping_followup_and_reports():
     assert app.request('/api/followups/'+row['ref'])['events'][0]['payload']['status']=='Done'
     restored=BrowserAPI(fixture_data(),'owner','actor',app.info,app.store.events)
     assert restored.request('/api/followups/'+row['ref'])['events']==app.request('/api/followups/'+row['ref'])['events']
-    assert restored.request('/api/analysis')['outstanding']['active_references']==5
+    assert restored.request('/api/analysis')['outstanding']['active_references']==0
+    assert restored.request('/api/analysis')['outstanding']['manually_resolved']==1
+    assert restored.request('/api/records/search','POST',{'pam':'10000006','outstanding_only':True})['total']==0
     for extension in ['csv','xlsx']:
         assert app.request('/api/reports/executive.'+extension)['binary']
     assert app.request('/api/reports/executive.pdf')['pdf_model']['headers']
