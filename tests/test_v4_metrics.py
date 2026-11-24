@@ -57,6 +57,24 @@ def test_matched_pam_with_conflicting_geography_is_not_assigned_a_random_master_
     assert sum(row[8] for row in data['G'])==1
 
 
+def test_existing_private_owner_bootstrap_preserves_the_v4_field_cube(tmp_path):
+    import json, secrets
+    from fastapi.testclient import TestClient
+    from backend.main import create_app
+    from tests.fixtures import encrypted_fixture
+    baseline,intake=snapshot()
+    data,_=convert(baseline,intake,bootstrap_aliases(baseline,intake),full_snapshot=True)
+    password=secrets.token_urlsafe(24)
+    source=tmp_path/'synthetic.enc.json'
+    source.write_text(json.dumps(encrypted_fixture(data,{'fixture-admin':(password,'a')})))
+    app=create_app(source,tmp_path/'state',origin='http://testserver',dev=True)
+    with TestClient(app,headers={'origin':'http://testserver'}) as client:
+        assert client.post('/api/login',json={'account':'fixture-admin','password':password}).status_code==200
+        boot=client.get('/api/bootstrap').json()
+        assert boot['data']['G']==data['G']
+        assert boot['data']['meta']['reporting_date']=='2026-11-23'
+
+
 def test_xlsx_discovers_renamed_sheets_and_inserted_columns_and_drops_customer_notes(tmp_path):
     path=tmp_path/'Update Report RPD 23112026.xlsx'
     book=Workbook();book.remove(book.active)
