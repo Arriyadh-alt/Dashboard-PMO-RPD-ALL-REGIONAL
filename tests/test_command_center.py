@@ -58,6 +58,12 @@ from backend.auth import decrypt_source
 from tests.fixtures import fixture_data
 
 
+def test_shared_dashboard_helper_is_served_by_existing_private_asset_route(client):
+    response=client.get('/potential.js')
+    assert response.status_code==200
+    assert 'RPDPotential' in response.text
+
+
 def test_original_crypto_contract_and_normalization(encrypted_source):
     data, role = decrypt_source(encrypted_source[0], "  FIXTURE-ADMIN  ", encrypted_source[1])
     assert role == "owner" and data["meta"]["rows"] == 14

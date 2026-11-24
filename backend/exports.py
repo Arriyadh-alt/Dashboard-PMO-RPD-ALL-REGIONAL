@@ -78,7 +78,7 @@ def safe_cell(value):
     return value
 
 
-def report_content(kind, extension, analysis, data, prepared, filters, store, role, source):
+def report_content(kind, extension, analysis, data, prepared, filters, store, role, source, *, account_role=None):
     headers, rows = report_table(kind, analysis, data, prepared, filters, store, role)
     if len(rows) > (2000 if extension == "pdf" else 20000):
         raise ValueError("Laporan terlalu besar; persempit filter sebelum ekspor. Tidak ada baris yang dipotong diam-diam.")
@@ -86,14 +86,14 @@ def report_content(kind, extension, analysis, data, prepared, filters, store, ro
     metadata = [TITLES[kind], f"Survey period: {scope['start'] or 'all available through'} – {scope['end']}",
                 "Filters: " + filter_labels(data,filters), "Last successful import: " + (source.get("imported_at") or "Insufficient Data"),
                 "Source loaded at: " + source["loaded_at"], "Source fingerprint: " + source["fingerprint"],
-                DEFINITION, scope["history"], "Role: " + role]
+                DEFINITION, scope["history"], "Role: " + (account_role or role)]
     if source.get('history_locked'):
         metadata.append('Local operational history unavailable: previous password required. Source-only calculations; saved history has not been applied.')
     return headers, rows, metadata
 
 
-def make_report(kind, extension, analysis, data, prepared, filters, store, role, source):
-    headers, rows, metadata = report_content(kind, extension, analysis, data, prepared, filters, store, role, source)
+def make_report(kind, extension, analysis, data, prepared, filters, store, role, source, *, account_role=None):
+    headers, rows, metadata = report_content(kind, extension, analysis, data, prepared, filters, store, role, source, account_role=account_role)
     if extension == "csv":
         output = io.StringIO(newline="")
         writer = csv.writer(output)

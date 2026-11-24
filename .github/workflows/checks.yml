@@ -21,9 +21,9 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: python -m pytest -q
       - run: python scripts/check_public.py
-      - run: node --check web/app.js && node --check web/command-center.js
+      - run: node --check web/app.js && node --check web/potential.js && node --check web/command-center.js && node --check pages/public.js
       - run: node --check pages/browser.js && node --input-type=module --check < pages/analysis-worker.js && node --check pages/pdf.js
-      - run: node --test tests/preset_scope.test.cjs tests/summary.test.cjs
+      - run: node --test tests/preset_scope.test.cjs tests/summary.test.cjs tests/potential.test.cjs
       - run: node tests/browser_engine.test.cjs
       - run: python -m pip_audit --progress-spinner off
       - run: python -m pip_audit -r pages/vendor/requirements-audit.txt --no-deps --disable-pip --progress-spinner off

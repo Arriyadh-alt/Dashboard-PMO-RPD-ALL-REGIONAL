@@ -69,7 +69,7 @@
     const latest=events.filter(e=>e.kind==='mapping'&&e.ref==='all').at(-1),values=latest?.payload||{};
     const data=source?Object.fromEntries(['months','abs','reg','kels','svs','st','kl','A','S','E','P','W','dic'].map(k=>[k,source[k]])):{months:summary.months,abs:summary.abs,reg:summary.reg,kels:summary.kels,P:summary.P,svs:[],st:[],kl:[],A:[],S:[],E:[],W:[],dic:{kf:[]}};
     data.meta=source?source.meta:{...summary.meta,rows:summary.days.reduce((a,r)=>a+r[3],0)};
-    return {data,role,csrf:'',overrides:Object.fromEntries((source?.svs||[]).flatMap((n,i)=>values[n]?[[i,values[n]]]:[])),mapping_version:latest?.id||0,geography:[...new Map([...summary.days,...summary.P].map(r=>[r[0]+':'+r[1],[r[0],r[1]]])).values()],area_keys:summary.area_keys,data_owner:info.owner||'',source:info,capabilities:{customer_detail:role==='owner',aggregate_only:role!=='owner',browser_only:true}};
+    return {data,role,csrf:'',overrides:Object.fromEntries((source?.svs||[]).flatMap((n,i)=>values[n]?[[i,values[n]]]:[])),mapping_version:latest?.id||0,geography:[...new Map([...summary.days,...summary.P].map(r=>[r[0]+':'+r[1],[r[0],r[1]]])).values()],area_keys:summary.area_keys,data_owner:info.owner||'',source:info,capabilities:{customer_detail:role==='owner'||!!info.operational_access,aggregate_only:!source&&!info.operational_access,browser_only:true,details_loaded:!!source}};
   }
   async function project(source){
     if([...source.abs,...source.reg].some(v=>/[^\x00-\x7f]/.test(v)))return null;

@@ -32,6 +32,8 @@ def update(source,plaintext,output,account,password,guest_output=None):
     data=json.loads(plaintext.read_text())
     previous=json.loads(gzip.decompress(AESGCM(key).decrypt(base64.b64decode(envelope['i']),base64.b64decode(envelope['c']),None)))
     access=previous.get('_guest_access')
+    if access and access.get('scope') == 'operational_v3':
+        raise ValueError('Use scripts.publish_v3 for a matching full V3 release, including approved public aggregates')
     guest=None;pair=None
     if access:
         if guest_output is None: raise ValueError('A paired Guest output is required for this protected source')

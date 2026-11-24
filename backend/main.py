@@ -369,7 +369,7 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
 
     @app.get("/{asset}")
     def asset(asset: str):
-        if asset not in ("app.js", "command-center.js", "styles.css", "command-center.css"):
+        if asset not in ("app.js", "potential.js", "command-center.js", "styles.css", "command-center.css"):
             raise HTTPException(404)
         return FileResponse(PUBLIC / asset)
 

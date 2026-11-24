@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#112b3c">
 <title>Dashboard RPD · PMO</title>
 <link rel="stylesheet" href="web/styles.css?v=0cf63c3a88aa95bf">
-<link rel="stylesheet" href="web/command-center.css?v=5e90a76e81e7c31d">
+<link rel="stylesheet" href="web/command-center.css?v=1efddf1e228f5f31">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'self'">
 </head>
@@ -56,15 +56,21 @@
 <footer class="wm"><span>PMO RPD · PAM JAYA</span><span>Design by Arriyadh</span></footer>
 </div>
 </div>
-<div id="lg">
+<div id="public-app">
+<header class="public-header"><a class="public-brand" href="#public-summary">PMO RPD <span>Seluruh Regional</span></a><nav aria-label="Navigasi publik"><a href="#public-summary">Ringkasan</a><a href="#public-charts">Grafik Kinerja</a><button id="public-login" class="primary" type="button">Masuk</button></nav></header>
+<main class="public-main" id="public-summary"><div class="public-heading"><div><span class="eyebrow">PAM JAYA</span><h1>Ringkasan Kinerja</h1></div><p id="public-updated" class="mu"></p></div><div id="public-content" aria-busy="true"><p class="mu" role="status">Memuat ringkasan…</p></div></main>
+<footer class="public-footer"><span>PMO RPD · PAM JAYA</span><span>Design by Arriyadh</span></footer></div>
+<div id="lg" hidden>
 <section class="login-form-side" aria-labelledby="login-title"><form class="lgc" id="login-form"><h1 id="login-title">PMO RPD</h1><p class="login-intro">Monitoring Kinerja Seluruh Regional</p>
 <label for="li">ID pengguna</label><input id="li" placeholder="Masukkan ID pengguna" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required>
 <label for="lp">Kata sandi</label><input id="lp" type="password" placeholder="Masukkan kata sandi" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" required>
 <button id="lb" class="login-submit" type="submit">Masuk</button><p id="le" class="login-status" role="status" aria-live="polite"></p>
-</form></section>
+<button id="public-back" type="button" class="text-button">Kembali ke Ringkasan</button></form></section>
 </div>
- <script src="pages/browser.js?v=bf8dd10ba7773ab8"></script>
-<script src="web/app.js?v=9c4f18e5563ae423" defer></script>
-<script src="web/command-center.js?v=13188003347746fc" defer></script>
+
+
+
+
+<script src="pages/public.js?v=836dd2529952705c" data-browser="pages/browser.js?v=151785ad7c7b5863" data-app="web/app.js?v=9c4f18e5563ae423" data-potential="web/potential.js?v=7d46552c26d1641d" data-center="web/command-center.js?v=acaf5a1d4106d921" defer></script>
 </body>
 </html>

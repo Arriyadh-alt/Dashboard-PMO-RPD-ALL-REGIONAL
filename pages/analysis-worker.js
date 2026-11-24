@@ -1,6 +1,7 @@
 /* Self-hosted Python/WASM worker: the reviewed analytics, not a second implementation. */
 const summaryReady=import('./summary.js?v='+encodeURIComponent(new URL(self.location.href).searchParams.get('summary')||''));
 let python=null,reportReady=false,chain=Promise.resolve(),initial=null,sourceObject=null,summary=null,bootstrapCache=null,pythonReady=false;
+const analysisCache=new Map();
 const base=new URL('.',self.location.href),version=new URL(self.location.href).searchParams.get('engine')||'';
 const progress=()=>self.postMessage({progress:'Menyiapkan laporan di perangkat ini…'});
 
@@ -21,7 +22,7 @@ def handle(text):
     previous=None
     try:
         if request['type']=='init':
-            api=BrowserAPI(json.loads(request['source']),request['role'],request['actor'],request['info'],request['events'])
+            api=BrowserAPI(json.loads(request['source']),request['role'],request['actor'],request['info'],request['events'],operational_guest=request['info'].get('operational_access',False))
             result=api.bootstrap()
         elif request['type']=='restore':
             api.store=LocalEvents(request['events'])
@@ -55,19 +56,34 @@ async function process(message){
     if(message.type==='init'){
       initial={...message,source:new TextDecoder().decode(message.source)};
       const parsed=JSON.parse(initial.source);
-      if(parsed.aggregate_version===1){summary=parsed;sourceObject=null;if(message.role!=='guest')throw new Error('Invalid dataset role')}
+      if(!['owner','guest'].includes(message.role))throw new Error('Invalid dataset role');
+      if(parsed.aggregate_version===1){summary=parsed;sourceObject=null}
       else {if(message.role!=='owner')throw new Error('Guest dataset is not separated');sourceObject=parsed;summary=await RPDSummary.project(parsed)}
       if(summary){bootstrapCache=RPDSummary.bootstrap(summary,sourceObject,initial.role,initial.info,initial.events);self.postMessage({id:message.id,ok:true,result:bootstrapCache});return}
     }
     if(!initial)throw new Error('Silakan masuk kembali.');
+    const operational=initial.role==='owner'||initial.info.operational_access;
+    if(message.type==='detail'){
+      if(!operational)throw new Error('Akses tidak diizinkan.');
+      const source=new TextDecoder().decode(message.source),parsed=JSON.parse(source);
+      if(!parsed.rec||parsed.aggregate_version||(initial.role==='guest'&&parsed._guest_access))throw new Error('Invalid operational source');
+      initial.source=source;sourceObject=parsed;bootstrapCache=RPDSummary.bootstrap(summary,sourceObject,initial.role,initial.info,initial.events);
+      self.postMessage({id:message.id,ok:true,result:bootstrapCache});return;
+    }
     const url=message.path?new URL(message.path,'https://local.invalid'):null;
     if(message.type==='request'&&url.pathname==='/api/bootstrap'&&bootstrapCache){self.postMessage({id:message.id,ok:true,result:bootstrapCache});return}
     if(message.type==='request'&&url.pathname==='/api/analysis'&&summary&&(message.method||'GET')==='GET'){
       const scope=Object.fromEntries(url.searchParams);scope.statuses=url.searchParams.getAll('status');
-      const fast=['ringkasan','kelurahan','data','catatan'].includes(scope.view)||initial.role==='guest';
+      const fast=['ringkasan','kelurahan','data','catatan'].includes(scope.view)||!operational;
       if(fast&&!scope.coordinator&&!scope.statuses.length){const result=RPDSummary.analyse(summary,scope,initial.events);self.postMessage({id:message.id,ok:true,result});return}
     }
-    if(initial.role!=='owner')throw new Error('Akses tidak diizinkan.');
+    if(!operational||(initial.role!=='owner'&&(message.mutation||message.type==='restore'||url?.pathname.startsWith('/api/admin/')||url?.pathname==='/api/quality')))throw new Error('Akses tidak diizinkan.');
+    if(!sourceObject)throw new Error('Muat data operasional terlebih dahulu.');
+    let analysisKey=null;
+    if(url?.pathname==='/api/analysis'&&(message.method||'GET')==='GET'){
+      const filters=new URLSearchParams(url.searchParams);filters.delete('view');filters.sort();analysisKey=filters.toString();
+      if(analysisCache.has(analysisKey)){self.postMessage({id:message.id,ok:true,result:analysisCache.get(analysisKey)});return}
+    }
     if(message.type==='restore'&&!pythonReady){initial.events=message.events;bootstrapCache=RPDSummary.bootstrap(summary,sourceObject,initial.role,initial.info,initial.events);self.postMessage({id:message.id,ok:true,result:{ok:true}});return}
     await runtime();
     if(!pythonReady){
@@ -81,6 +97,8 @@ async function process(message){
     python.globals.set('_request_json',JSON.stringify(message));
     const response=JSON.parse(python.runPython('handle(_request_json)'));
     python.runPython('del _request_json');
+    if(response.ok&&analysisKey!==null){if(analysisCache.size>=2)analysisCache.delete(analysisCache.keys().next().value);analysisCache.set(analysisKey,response.result)}
+    if(response.ok&&(message.mutation||message.type==='restore'))analysisCache.clear();
     if(response.ok&&message.type==='restore')initial.events=message.events;
     if(response.ok&&message.mutation){initial.events=response.events;bootstrapCache=summary?RPDSummary.bootstrap(summary,sourceObject,initial.role,initial.info,initial.events):null}
     self.postMessage({id:message.id,...response});
