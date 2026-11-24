@@ -79,6 +79,7 @@ def test_audit_rejects_date_swaps_that_preserve_global_daily_counts():
     from scripts.reconcile_v4 import reconcile
     baseline,intake=snapshot();aliases=bootstrap_aliases(baseline,intake)
     data,_=convert(baseline,intake,aliases,full_snapshot=True)
+    assert reconcile(intake,data,aliases)['passed']
     intake['survey'][0]['meter_date'],intake['survey'][2]['meter_date']=intake['survey'][2]['meter_date'],intake['survey'][0]['meter_date']
     result=reconcile(intake,data,aliases)
     assert not result['passed']
@@ -93,6 +94,16 @@ def test_audit_rejects_a_wrong_outstanding_category_with_an_unchanged_total():
     result=reconcile(intake,data,aliases)
     assert not result['passed']
     assert any(row['metric']=='Outstanding file categories · exact buckets' and row['status']=='FAIL' for row in result['checks'])
+
+
+@pytest.mark.parametrize('field,value',[('reporting_date','2026-11-24'),('workbook_sha256','0'*64)])
+def test_audit_rejects_stale_metadata_even_when_records_are_identical(field,value):
+    from scripts.reconcile_v4 import reconcile
+    baseline,intake=snapshot();aliases=bootstrap_aliases(baseline,intake)
+    data,_=convert(baseline,intake,aliases,full_snapshot=True)
+    intake[field]=value
+    with pytest.raises(ValueError,match='provenance'):
+        reconcile(intake,data,aliases)
 
 
 def test_xlsx_discovers_renamed_sheets_and_inserted_columns_and_drops_customer_notes(tmp_path):

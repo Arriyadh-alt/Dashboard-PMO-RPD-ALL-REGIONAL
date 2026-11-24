@@ -14,6 +14,11 @@ from scripts.workbook_intake import header, text, write_private
 
 
 def reconcile(intake, data, aliases, reference=None):
+    if not intake.get('workbook_sha256') or data['meta'].get('workbook_sha256')!=intake['workbook_sha256'] or data['meta'].get('reporting_date')!=intake.get('reporting_date'):
+        raise ValueError('Contract workbook provenance does not match the audited intake')
+    source_dates=[row['survey_date'] for row in intake['survey'] if row['survey_date']]
+    if not source_dates or data['meta']['tmin']!=min(source_dates) or data['meta']['tmax']!=max(source_dates):
+        raise ValueError('Contract survey range does not match the audited intake')
     prepared = prepare(data)
     analysis = build_analysis(data, prepared, {}, LocalEvents(), 'owner')
     survey, master = intake['survey'], intake['master']
@@ -103,7 +108,7 @@ def reconcile(intake, data, aliases, reference=None):
             for row in prepared['rows']))
     check('Per-PAM Q/AI membership',len(survey),sum(row['pam'] in by_id
         and row['interest']==interested(by_id[row['pam']])
-        and row['status'].casefold()==header(by_id[row['pam']]['installation_status'])
+        and row['status'].casefold()==(header(by_id[row['pam']]['installation_status']) or 'tidak tercatat')
         for row in prepared['rows']))
     events=Counter(row['meter_date'] for row in survey if row['meter_date'] and header(row['installation_status'])=='done')
     observed_events=Counter({row['month']:row['installation_events'] for row in analysis['trend_series']['daily'] if row['installation_events']})
@@ -135,7 +140,9 @@ def reconcile(intake, data, aliases, reference=None):
     return {'source_sha256':intake['workbook_sha256'],'reporting_date':intake.get('reporting_date'),
         'survey_through':data['meta']['tmax'],'checks':checks,
         'passed':all(row['status']=='PASS' for row in checks),
-        'master_join':intake['summary']['cross_sheet'],
+        'master_join':{'matched':len(by_id.keys()&master_by_id.keys()),
+            'survey_not_in_master':len(by_id.keys()-master_by_id.keys()),
+            'master_not_in_survey':len(master_by_id.keys()-by_id.keys())},
         'unmapped_survey_rows':data['meta']['geographic_survey_unmapped'],
         'definitions':data['meta']['metric_definitions'],
         'active_potential':{'status':'UNVERIFIED','reason':'No separately approved definition; not invented.'}}
