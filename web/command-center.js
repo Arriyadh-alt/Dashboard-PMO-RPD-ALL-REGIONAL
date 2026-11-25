@@ -59,7 +59,7 @@ function localLogout() {
   S.dq={p:'',k:'',s:'',c:0,f:0,r:0};
   window.RPDStatic?.stop();
   analysisRevision++;viewRevision++;searchRevision++;clearTimeout(searchTimer);
-  D=REC=WM=A=QUALITY=ADMIN=null;OV={};ROLE=CSRF='';SOURCE=CAP=BOOT={};CURRENT_ROWS=[];CASE=null;PAGE=0;grids.clear();gridStates.clear();legacyPanels.clear();renderedTab='';
+  D=REC=WM=A=QUALITY=ADMIN=MAPPING=null;OV={};ROLE=CSRF='';SOURCE=CAP=BOOT={};CURRENT_ROWS=[];CASE=null;PAGE=0;grids.clear();gridStates.clear();legacyPanels.clear();renderedTab='';
   const dialog=$('#case-dialog');if(dialog?.open)dialog.close();if(dialog)dialog.remove();
   try{sessionStorage.removeItem('rpd_session_scope')}catch{}
   $('#main').innerHTML='';$('#app').hidden=true;$('#lg').hidden=false;$('#out').hidden=true;$('#lb').disabled=false;$('#lb').textContent='Masuk';$('#li').value='';$('#lp').value='';$('#le').textContent='';$('#sub').textContent='';setStatus('');$('#li').focus();
@@ -95,7 +95,7 @@ function presetList() {try{const data=JSON.parse(localStorage.getItem('rpd_filte
 function savePresetList(value){try{localStorage.setItem('rpd_filter_presets',JSON.stringify(value))}catch{setStatus('Preset tidak dapat disimpan pada peramban ini.')}}
 
 function presetScope(){
-  return {version:2,scope:scopeObject(),field:{rw:S.rw??-1,rt:S.rt??-1},period:[D.months[S.m0],D.months[S.m1]],openingBucket:S.m0===0,areaKey:S.ab>=0?BOOT.area_keys[S.ab]:null,kelName:S.kel>=0?D.kels[S.kel]:null};
+  return {version:2,scope:Object.fromEntries(scopeKeys.map(key=>[key,S[key]])),field:{rw:S.rw??-1,rt:S.rt??-1},period:[D.months[S.m0],D.months[S.m1]],openingBucket:S.m0===0,areaKey:S.ab>=0?BOOT.area_keys[S.ab]:null,kelName:S.kel>=0?D.kels[S.kel]:null};
 }
 
 function resolvePreset(value){
