@@ -42,6 +42,14 @@ class MappingChange(StrictModel):
 
 
 class Scope(StrictModel):
+    rw: int = Field(default=-1, ge=-1, le=99)
+    rt: int = Field(default=-1, ge=-1, le=99)
+    aging_date: str = Field(default='', max_length=10)
+    snapshot: str = Field(default='', max_length=10)
+    aging_bucket: str = Field(default='', max_length=30)
+    out_surveyor: str = Field(default='', max_length=150)
+    out_obstacle: str = Field(default='', max_length=500)
+    out_query: str = Field(default='', max_length=150)
     m0: int = Field(default=0, ge=0)
     m1: int | None = Field(default=None, ge=0)
     reg: str = Field(default="", max_length=100)
@@ -65,7 +73,7 @@ class Search(StrictModel):
     offset: int = Field(default=0, ge=0)
     limit: int = Field(default=50, ge=1, le=100)
     query: str = Field(default='', max_length=150)
-    sort: Literal['', 'pam', 'survey_date', 'regional', 'surveyor', 'canvassing', 'status', 'fa_date', 'obstacle', 'potential_status', 'arrears', 'followup'] = ''
+    sort: Literal['', 'pam', 'survey_date', 'regional', 'surveyor', 'canvassing', 'status', 'fa_date', 'obstacle', 'potential_status', 'arrears', 'followup', 'survey_age_days', 'area', 'kelurahan', 'rw', 'rt', 'file_status', 'notes'] = ''
     descending: bool = False
 
 
@@ -260,6 +268,11 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
     @app.get("/api/quality")
     def data_quality(session=Depends(authenticated)):
         return {**quality(session.data["source"], session.data["prepared"]), "source": session.data["info"]}
+
+    @app.get('/api/admin/mapping-validation')
+    def mapping_validation(session=Depends(administrator)):
+        from .browser_api import BrowserAPI
+        return BrowserAPI(session.data['source'],'owner','admin',session.data['info']).request('/api/admin/mapping-validation')
 
     @app.post("/api/records/search")
     def search(body: Search, session=Depends(administrator)):

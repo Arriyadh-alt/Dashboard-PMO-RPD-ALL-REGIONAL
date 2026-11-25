@@ -43,7 +43,7 @@ def publish(source, plaintext, directory, account, password):
     analysis = build_analysis(data, prepared, {}, LocalEvents(), 'owner')
     pair = os.urandom(16).hex()
     guest_key = base64.b64decode(access['key'])
-    guest_data = {k: v for k, v in data.items() if k != '_guest_access'}
+    guest_data = {k: v for k, v in data.items() if k not in ('_guest_access', '_admin_mapping_report')}
     release = {
         'data.enc.json': encrypt(data, key, envelope['u'], pair),
         'guest.enc.json': encrypt(guest_data, guest_key, access['wrappers'], pair),

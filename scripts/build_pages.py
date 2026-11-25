@@ -13,7 +13,7 @@ from datetime import datetime,timezone
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parent.parent
-MODULES=['__init__.py','analytics.py','exports.py','browser_api.py']
+MODULES=['__init__.py','analytics.py','aging.py','exports.py','browser_api.py']
 
 
 def engine(root=ROOT):

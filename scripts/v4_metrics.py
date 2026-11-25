@@ -9,11 +9,11 @@ from collections import defaultdict
 from scripts.workbook_intake import header, text
 
 
-EXTRA_RECORD_FIELDS = {'it', 'il', 'fs', 'an', 'ir', 'pd'}
+EXTRA_RECORD_FIELDS = {'it', 'il', 'fs', 'an', 'ir', 'pd', 'rw', 'rt', 'ad', 'gc', 'ds', 'nt'}
 
 
 def validate_intake(intake):
-    if intake.get('layout_version') != 4:
+    if intake.get('layout_version') not in (4, 5):
         raise ValueError('V4 metrics require the V4 workbook intake')
     for kind in ('survey', 'master'):
         values = intake['summary'][kind]

@@ -33,7 +33,10 @@ def source_date(value):
 
 def normalize_pam(value):
     value = str(value).strip()
-    return value.lstrip("0") if re.fullmatch(r"[0-9]{1,9}", value) and int(value) > 0 else ""
+    if not re.fullmatch(r"[0-9]{1,32}(?:\.[0-9]{1,12})?(?:[eE][+-]?[0-9]{1,3})?", value):
+        return ''
+    numeric = Decimal(value)
+    return str(int(numeric)) if 0 < numeric < 1_000_000_000 and numeric == numeric.to_integral_value() else ''
 
 
 def label(data, field, value):
@@ -67,7 +70,8 @@ def prepare(data):
     count = len(rec["pam"])
     if any(len(rec[key]) != count for key in FIELDS):
         raise ValueError("Record column lengths differ")
-    for key in ('it', 'il', 'fs', 'an', 'ir', 'pd'):
+    optional = ('it', 'il', 'fs', 'an', 'ir', 'pd', 'rw', 'rt', 'ad', 'gc', 'ds', 'nt')
+    for key in optional:
         if key in rec and (not isinstance(rec[key], list) or len(rec[key]) != count):
             raise ValueError('Optional record column lengths differ')
     if 'it' in rec and any(type(value) not in (int, bool) or value not in (0, 1) for value in rec['it']):
@@ -75,7 +79,7 @@ def prepare(data):
     rows, locations = [], defaultdict(set)
     for i in range(count):
         row = {key: rec[key][i] for key in FIELDS}
-        row.update({key: rec[key][i] for key in ('it', 'il', 'fs', 'an', 'ir', 'pd') if key in rec})
+        row.update({key: rec[key][i] for key in optional if key in rec})
         row.update(index=i, pam=normalize_pam(row["pam"]), date=source_date(row["t"]),
                    fa_date=source_date(row["fa"]), install_date=source_date(row["mt"]))
         row["valid_location"] = all(isinstance(row[key], int) and 0 <= row[key] < len(data[values])
@@ -93,10 +97,11 @@ def prepare(data):
     if 'G' in data:
         # Release invariant: field performance covers ALL survey rows, while
         # remaining stock deducts only interested members of eligible master.
-        geographic, stock, expected = defaultdict(lambda: [0]*5), defaultdict(lambda: [0,0]), defaultdict(lambda: [0]*3)
+        v5 = bool(data['meta'].get('v5'))
+        geographic, stock, expected = defaultdict(lambda: [0]*(6 if v5 else 5)), defaultdict(lambda: [0,0]), defaultdict(lambda: [0]*3)
         keys = set()
         for group in data['G']:
-            if (not isinstance(group, list) or len(group) != 9 or
+            if (not isinstance(group, list) or len(group) != (10 if v5 else 9) or
                 any(type(value) is not int or value < 0 for value in group) or
                 group[0] >= len(data['abs']) or group[1] >= len(data['kels']) or
                 max(group[2:4]) > 99 or group[8] > group[4] or tuple(group[:4]) in keys):
@@ -108,7 +113,7 @@ def prepare(data):
             for j, value in enumerate(group[2:4]):
                 stock[tuple(group[:2])][j] += value
         for row in rows:
-            if not row['valid']:
+            if not row['valid'] and not (v5 and row['pam'] and row['valid_location']):
                 raise ValueError('V4 publication requires valid survey rows')
             values = expected[row['ab'], row['kel']]
             values[0] += 1
@@ -120,13 +125,24 @@ def prepare(data):
             values = geographic[key]
             if values[1:4] != expected[key] or [values[0], values[4]] != stock[key]:
                 raise ValueError('V4 geographic totals do not reconcile with survey/master populations')
+        if v5:
+            exact = defaultdict(lambda: [0]*4)
+            for row in rows:
+                if any(type(row.get(key)) is not int or not 0 <= row[key] <= 99 for key in ('rw', 'rt')):
+                    raise ValueError('Invalid enriched RT/RW')
+                values = exact[row['ab'], row['kel'], row['rw'], row['rt']]
+                for j, value in enumerate((1, row['interest'], row['installed'], row['status'].casefold() == 'outstanding')):
+                    values[j] += value
+            actual = {tuple(group[:4]): group[5:8]+[group[9]] for group in data['G']}
+            if any(actual.get(key) != value for key, value in exact.items()) or any(value != exact[key] for key, value in actual.items()):
+                raise ValueError('Enriched geography does not reconcile at RT/RW/PAM level')
     # A PAM ID mapped to several geographies is not assigned arbitrarily to a region.
     ambiguous = {pam for pam, places in locations.items() if len(places) > 1}
     defaults = {}
     for entry in data["S"]:
         if len(entry) >= 4 and 0 <= entry[2] < len(data["kl"]):
             defaults.setdefault(entry[3], data["kl"][entry[2]])
-    return {"rows": rows, "ambiguous": ambiguous, "default_coordinators": defaults}
+    return {"rows": rows, "outstanding_rows": [row for row in rows if row['status'].casefold() == 'outstanding'], "ambiguous": ambiguous, "default_coordinators": defaults}
 
 
 def coordinator(data, prepared, row, overrides):
@@ -157,6 +173,9 @@ def matches(data, prepared, row, filters, overrides, date_field="date", dates=Tr
         return False
     for field in ("ab", "kel"):
         if int(filters.get(field, -1)) >= 0 and row[field] != int(filters[field]):
+            return False
+    for field in ('rw', 'rt'):
+        if int(filters.get(field, -1)) >= 0 and row.get(field, 0) != int(filters[field]):
             return False
     if filters.get("coordinator") and coordinator(data, prepared, row, overrides) != filters["coordinator"]:
         return False
@@ -211,6 +230,12 @@ def cohort(rows, ambiguous):
 
 
 def master_stock(data, filters):
+    if 'G' in data and (int(filters.get('rw',-1))>=0 or int(filters.get('rt',-1))>=0):
+        selected=[row for row in data['G'] if (not filters.get('reg') or data['reg'][row[0]]==filters['reg'])
+                  and all(int(filters.get(key,-1))<0 or row[index]==int(filters[key]) for key,index in [('ab',0),('kel',1),('rw',2),('rt',3)])]
+        potential,matched=sum(row[4] for row in selected),sum(row[8] for row in selected)
+        return {'potential':potential,'matched_interested':matched,'remaining':potential-matched,'installed':None,
+                'scope':'Stok master seluruh periode pada RT/RW terpilih. Terpasang master pada tingkat ini tidak diestimasi.'}
     selected = [row for row in data["P"] if
                 (not filters.get("reg") or data["reg"][row[0]] == filters["reg"])
                 and (int(filters.get("ab", -1)) < 0 or row[0] == int(filters["ab"]))
@@ -285,6 +310,7 @@ def priority(metrics, context, rules):
 
 
 def build_analysis(data, prepared, filters, store, role):
+    from .aging import summary as aging_summary
     overrides = store.latest("mapping").get("all", {})
     rows = scoped_rows(data, prepared, filters, overrides)
     metrics = cohort(rows, prepared["ambiguous"])
@@ -409,7 +435,8 @@ def build_analysis(data, prepared, filters, store, role):
                             "urgent_count": len(urgent), "urgent": urgent if role == "owner" else [],
                             "by_status": dict(Counter(row["status"] for row in pending)),
                             "by_region": dict(Counter(data["reg"][row["ab"]] for row in pending)), "aging": dict(aging),
-                            "aging_as_of": today.isoformat(), "aging_rule": "Hari kalender sejak tanggal awal kasus terkonfirmasi administrator, dikurangi total hari jeda terkonfirmasi. Tidak memakai tanggal survei."},
+                            "aging_as_of": today.isoformat(), "aging_rule": "Hari kalender sejak tanggal awal kasus terkonfirmasi administrator, dikurangi total hari jeda terkonfirmasi. Tidak memakai tanggal survei.",
+                            **(aging_summary(data, prepared, filters, overrides, latest_actions) if data['meta'].get('v5') else {})},
             "scope": {"start": period_bounds(data, filters)[0].isoformat() if period_bounds(data, filters)[0] else None,
                       "end": period_bounds(data, filters)[1].isoformat(),
                       "filters": filters, "cohort": "PAM ID unik dalam kohort tanggal survei; konflik geografis dikecualikan, konflik status tidak diasumsikan selesai.",
@@ -441,7 +468,12 @@ def target_analysis(data, prepared, filters, store, overrides):
 
 def record_view(data, prepared, row, overrides, action=None):
     width = 8 if data["reg"][row["ab"]] in ("Timur", "Utara") else 9
-    return {"ref": row["ref"], "pam": row.get('pd') or row["pam"].zfill(width), "survey_date": row["date"].isoformat(),
+    display = row.get('pd') or ''
+    return {"ref": row["ref"], "pam": display if re.fullmatch(r'[0-9]+',display) else row['pam'].zfill(width), "survey_date": row["date"].isoformat() if row['date'] else None,
+            'rw': row.get('rw', 0), 'rt': row.get('rt', 0), 'address': label(data, 'ad', row.get('ad')),
+            'geographic_conflict': bool(row.get('gc')), 'file_status': label(data, 'fs', row.get('fs')),
+            'notes': label(data, 'nt', row.get('nt')), 'survey_date_quality': {0:'valid',1:'missing',2:'invalid'}.get(row.get('ds', 0), 'invalid'),
+            'illegal_flag': label(data, 'il', row.get('il')),
             "regional": data["reg"][row["ab"]], "area": data["abs"][row["ab"]], "kelurahan": data["kels"][row["kel"]],
             "surveyor": data["svs"][row["sv"]], "coordinator": coordinator(data, prepared, row, overrides),
             "canvassing": label(data, "c1", row["c1"]), "status": row["status"],
@@ -457,6 +489,9 @@ RECORD_SORTS = ('pam', 'survey_date', 'regional', 'surveyor', 'canvassing', 'sta
 
 def search_records(data, prepared, filters, overrides, actions, body):
     """Apply search/sort to the complete authorized scope, then paginate once."""
+    if body.get('outstanding_only') and data['meta'].get('v5'):
+        from .aging import search
+        return search(data, prepared, filters, overrides, actions, body)
     query, sort = body.get('query', ''), body.get('sort', '')
     if not isinstance(query, str) or len(query) > 150 or sort not in ('', *RECORD_SORTS) or type(body.get('descending', False)) is not bool:
         raise ValueError('Invalid record search or sort')

@@ -83,6 +83,25 @@ html,body,button,input,select,textarea{font-family:Arial,Helvetica,sans-serif}
 .report-table thead th{position:sticky;top:0;z-index:1;background:var(--sf)}
 .case-readonly{display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px}
 .case-readonly dt{color:var(--mu);font-size:11px}.case-readonly dd{margin:4px 0}
+.aging-dates,.aging-controls{display:flex;gap:12px 22px;align-items:end;flex-wrap:wrap;font-size:12px;margin:12px 0}
+.aging-controls .field{min-width:160px}.aging-controls button{min-height:38px}
+.out-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
+.out-filter-panel{margin:16px 0}.out-filter-panel summary,.calculation-info summary{cursor:pointer;color:var(--accent);font-size:12px}
+.out-filters select,.out-filters input{max-width:100%;min-width:0;min-height:38px}
+.aging-panel{margin-top:16px}.aging-chart{display:grid;gap:7px}
+.aging-bar{display:grid;grid-template-columns:minmax(170px,1fr) 2fr 60px;gap:12px;align-items:center;text-align:left;border:0;background:transparent;padding:8px;border-left:4px solid var(--aging-color);font-size:12px}
+.aging-bar[aria-pressed=true]{outline:2px solid var(--accent);outline-offset:1px;background:var(--soft)}
+.aging-track{height:12px;background:var(--ln);border-radius:3px;overflow:hidden}.aging-track i{display:block;height:100%;background:var(--aging-color)}
+.aging-bar strong{text-align:right}.calculation-info{margin:12px 0;font-size:12px;color:var(--mu)}.calculation-info p{max-width:90ch;line-height:1.6;margin-top:8px}
+.operational-scroll{max-width:100%;max-height:540px;overflow:auto;overscroll-behavior:contain;isolation:isolate;border:1px solid var(--ln);border-radius:6px}
+.operational-table{min-width:1500px;table-layout:auto}.operational-table th,.operational-table td{font-size:12px;white-space:nowrap;background:var(--sf);max-width:300px}
+.operational-scroll .report-table td{position:static!important;left:auto!important}
+.operational-scroll .report-table th{position:sticky!important;top:0;left:auto!important;z-index:3}
+.operational-scroll .report-table td:first-child,.operational-scroll .report-table th:first-child{position:sticky!important;left:0!important;min-width:128px;max-width:160px;box-shadow:2px 0 3px #142b3710}
+.operational-scroll .report-table td:first-child{z-index:2}.operational-scroll .report-table th:first-child{z-index:4}
+.operational-table td:last-child{white-space:normal;min-width:200px;text-align:left}.operational-table td:nth-child(5),.operational-table td:nth-child(6){font-variant-numeric:tabular-nums;min-width:55px}
+.aging-kpis .intel-card:last-child,.potential-kpis .intel-card:last-child{grid-column:auto!important}
+@media(max-width:760px){.out-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.aging-controls{gap:8px}.aging-controls .field{min-width:0;flex:1 1 140px}.aging-controls input,.out-filters select,.out-filters input{font-size:16px;min-height:42px}.aging-bar{grid-template-columns:minmax(125px,1fr) 1fr 42px;gap:8px;font-size:11px;padding:7px 5px}.aging-dates{gap:6px;font-size:11px}.aging-dates>span{flex-basis:100%}.aging-kpis .intel-card,.potential-kpis .intel-card{padding:10px!important}.aging-kpis .metric-value{font-size:23px!important}.operational-table th,.operational-table td{padding:8px!important}.operational-scroll .report-table td:first-child,.operational-scroll .report-table th:first-child{min-width:115px;max-width:115px}.aging-kpis .intel-card:last-child{grid-column:1/-1!important}}
 @media(max-width:1000px){.intel-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:600px){
   .public-header{padding:16px;gap:10px;flex-wrap:wrap}.public-brand{font-size:18px}.public-brand span{font-size:10px}
