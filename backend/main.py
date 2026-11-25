@@ -284,7 +284,7 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
         return search_records(source, prepared, filters, overrides, actions, body.model_dump())
 
     def known_case(ref, session):
-        if not any(row["valid"] and row["ref"] == ref for row in session.data["prepared"]["rows"]):
+        if not any(row['valid_location'] and row['pam'] and row['pam'] not in session.data['prepared']['ambiguous'] and row['ref']==ref for row in session.data['prepared']['rows']):
             raise HTTPException(404, "Referensi kasus tidak ditemukan pada sumber aktif.")
 
     @app.get("/api/followups/{ref}")

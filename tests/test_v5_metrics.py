@@ -133,3 +133,14 @@ def test_aggregate_viewer_cannot_get_protected_dictionaries():
     assert 'ad' not in aggregate['dic'] and 'nt' not in aggregate['dic'] and 'G' not in aggregate
     operational=BrowserAPI(data,'guest','fixture',{},operational_guest=True).bootstrap()['data']
     assert 'ad' in operational['dic'] and 'nt' in operational['dic']
+
+
+def test_followup_allowed_for_identified_undated_outstanding():
+    def change(intake): intake['survey'][2].update(survey_date=None,date_quality='missing')
+    data,_,_=v5_source(change)
+    api=BrowserAPI(data,'owner','fixture',{})
+    row=api.request('/api/records/search','POST',{'outstanding_only':True})['rows'][0]
+    path='/api/followups/'+row['ref']
+    assert api.request(path)['events']==[]
+    api.request(path,'POST',{'pic':'Fixture PIC','status':'Outstanding','action':'Periksa tanggal sumber'})
+    assert len(api.request(path)['events'])==1

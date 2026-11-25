@@ -151,7 +151,7 @@ class BrowserAPI:
             return search_records(source,prepared,filters,overrides,actions,{**body,'offset':offset,'limit':limit})
         if route.startswith('/api/followups/'):
             ref=route.rsplit('/',1)[-1]
-            if not any(row['valid'] and row['ref']==ref for row in prepared['rows']): raise ValueError('Unknown case in current source')
+            if not any(row['valid_location'] and row['pam'] and row['pam'] not in prepared['ambiguous'] and row['ref']==ref for row in prepared['rows']): raise ValueError('Unknown case in current source')
             if method=='GET':
                 limit=integer(raw.get('limit',100),1,1000);before=integer(raw['before'],1,10**9) if raw.get('before') else None
                 events=store.history('followup',ref,limit,before)
