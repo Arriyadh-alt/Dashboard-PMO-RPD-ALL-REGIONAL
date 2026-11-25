@@ -297,6 +297,8 @@ def read_intake(path, *, v4=False, v5=False):
                 raw = row[field]
                 try:
                     row[field] = flexible_date(raw, date1904)
+                    if row[field] and not 2000<=int(row[field][:4])<=2099:
+                        raise ValueError('Survey date outside established RPD date contract')
                     row['date_quality'] = 'valid' if row[field] else 'missing'
                 except (ValueError, OverflowError, TypeError):
                     row[field], row['date_quality'] = None, 'invalid'

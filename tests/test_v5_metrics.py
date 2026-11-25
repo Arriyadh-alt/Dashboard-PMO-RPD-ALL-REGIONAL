@@ -152,3 +152,10 @@ def test_labeled_master_columns_are_normalized_before_legacy_stock_building():
     def change(intake): intake['master'][0].update(rw='RW 005',rt='RT.003')
     data,_,_=v5_source(change)
     assert data['rec']['rw'][0]==5 and data['rec']['rt'][0]==3
+
+
+def test_implausible_legacy_excel_date_is_retained_as_invalid_case():
+    def change(intake): intake['survey'][2].update(survey_date='1900-01-01',date_quality='valid')
+    data,_,_=v5_source(change)
+    rows=aging.records(data,prepare(data),{'start':'2026-11-01','end':'2026-11-30'},{},{})
+    assert len(rows)==1 and rows[0]['survey_date_quality']=='invalid' and rows[0]['survey_age_days'] is None

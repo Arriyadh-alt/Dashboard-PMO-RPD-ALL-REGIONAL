@@ -161,6 +161,9 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False, 
         raise ValueError('Baseline record column lengths differ')
     survey, master = index_records(intake['survey']), index_records(intake['master'])
     if v5:
+        survey={pam:({**row,'survey_date':None,'date_quality':'invalid'}
+                     if row['survey_date'] and not 2000<=int(row['survey_date'][:4])<=2099 else row)
+                for pam,row in survey.items()}
         for pam,row in master.items():
             labels={}
             for kind in ('rw','rt'):
@@ -244,8 +247,7 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False, 
         if canonical not in svs or svs[canonical] not in coordinators:
             raise ValueError('Unmapped surveyor/coordinator requires private roster review')
         sv = svs[canonical]
-        t = (int(row['survey_date'].replace('-', '')) if v5 and row['survey_date'] and not 2000 <= int(row['survey_date'][:4]) <= 2099
-             else date_code(row['survey_date'], required=not v5))
+        t = date_code(row['survey_date'], required=not v5)
         fa, mt = date_code(row['fa_date']), date_code(row['meter_date'])
         c1, c2, status = text(row['result']), text(row['result_detail']), text(row['installation_status'])
         interested, uninterested = header(row['minat'] if v4 else c1) == 'berminat', c1 == 'Tidak Berminat'
