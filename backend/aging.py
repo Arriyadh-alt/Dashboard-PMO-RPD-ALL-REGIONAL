@@ -67,6 +67,8 @@ def records(data, prepared, filters, overrides, actions, *, bucket=True, referen
     area, kel = int(filters.get('ab', -1)), int(filters.get('kel', -1))
     result = []
     for view in views:
+        if historic and overrides.get(view['surveyor'],{}).get('kl'):
+            view={**view,'coordinator':overrides[view['surveyor']]['kl']}
         if filters.get('reg') and view['regional'] != filters['reg']: continue
         if area >= 0 and (view['regional'], view['area']) != (data['reg'][area], data['abs'][area]): continue
         if kel >= 0 and view['kelurahan'] != data['kels'][kel]: continue
@@ -77,7 +79,6 @@ def records(data, prepared, filters, overrides, actions, *, bucket=True, referen
         if filters.get('out_obstacle') and view['obstacle'] != filters['out_obstacle']: continue
         surveyed = date.fromisoformat(view['survey_date']) if view.get('survey_date') else None
         if surveyed and ((start and surveyed < start) or surveyed > end): continue
-        if not surveyed and bounded: continue
         value = aged(view, reference)
         value['historical'] = historic
         if bucket and filters.get('aging_bucket') and value['aging_bucket'] != filters['aging_bucket']: continue
@@ -106,7 +107,7 @@ def summary(data, prepared, filters, overrides, actions):
     comparison = None
     if previous:
         prior = previous[-1]
-        prior_stats = statistics(records(data, prepared, filters, overrides, {}, bucket=False,
+        prior_stats = statistics(records(data, prepared, {**filters,'out_query':''}, overrides, {}, bucket=False,
                                  reference=date.fromisoformat(prior['reporting_date']), snapshot=prior))
         comparison = {'reporting_date': prior['reporting_date'], 'aging_as_of': prior['reporting_date'], **prior_stats}
     return {**statistics(views), 'aging_model': 'survey_calendar_jakarta', 'aging_as_of': reference.isoformat(),
