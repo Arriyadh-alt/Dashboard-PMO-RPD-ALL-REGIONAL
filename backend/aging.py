@@ -98,7 +98,7 @@ def statistics(views):
             'date_anomalies': dict(Counter(row['date_anomaly'] for row in views if row['date_anomaly']))}
 
 
-def summary(data, prepared, filters, overrides, actions):
+def summary(data, prepared, filters, overrides, actions, *, details=True):
     reference = reference_date(filters)
     views = records(data, prepared, {**filters,'out_query':''}, overrides, actions, bucket=False, reference=reference)
     snapshot = selected_snapshot(data, filters)
@@ -111,7 +111,7 @@ def summary(data, prepared, filters, overrides, actions):
                                  reference=date.fromisoformat(prior['reporting_date']), snapshot=prior))
         comparison = {'reporting_date': prior['reporting_date'], 'aging_as_of': prior['reporting_date'], **prior_stats}
     return {**statistics(views), 'aging_model': 'survey_calendar_jakarta', 'aging_as_of': reference.isoformat(),
-            'geography_options': [list(key) for key in sorted({(row['regional'],row['area'],row['kelurahan'],row.get('rw',0),row.get('rt',0)) for row in (snapshot['rows'] if snapshot else views)})],
+            'geography_options': [list(key) for key in sorted({(row['regional'],row['area'],row['kelurahan'],row.get('rw',0),row.get('rt',0)) for row in (snapshot['rows'] if snapshot else views)})] if details else [],
             'reporting_date': stamp, 'available_snapshots': [entry['reporting_date'] for entry in data.get('outstanding_history', [])],
             'comparison': comparison, 'transitions': snapshot.get('transitions') if snapshot else None,
             'aging_rule': 'Hari kalender Asia/Jakarta sejak Tanggal Survey. Ambang pemantauan, bukan SLA. Status mengikuti snapshot impor yang dipilih.',

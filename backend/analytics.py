@@ -436,7 +436,7 @@ def build_analysis(data, prepared, filters, store, role):
                             "by_status": dict(Counter(row["status"] for row in pending)),
                             "by_region": dict(Counter(data["reg"][row["ab"]] for row in pending)), "aging": dict(aging),
                             "aging_as_of": today.isoformat(), "aging_rule": "Hari kalender sejak tanggal awal kasus terkonfirmasi administrator, dikurangi total hari jeda terkonfirmasi. Tidak memakai tanggal survei.",
-                            **(aging_summary(data, prepared, filters, overrides, latest_actions) if data['meta'].get('v5') else {})},
+                            **(aging_summary(data, prepared, filters, overrides, latest_actions, details=role=='owner') if data['meta'].get('v5') else {})},
             "scope": {"start": period_bounds(data, filters)[0].isoformat() if period_bounds(data, filters)[0] else None,
                       "end": period_bounds(data, filters)[1].isoformat(),
                       "filters": filters, "cohort": "PAM ID unik dalam kohort tanggal survei; konflik geografis dikecualikan, konflik status tidak diasumsikan selesai.",

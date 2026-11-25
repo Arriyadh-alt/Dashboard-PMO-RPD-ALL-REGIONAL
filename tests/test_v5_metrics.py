@@ -133,6 +133,8 @@ def test_aggregate_viewer_cannot_get_protected_dictionaries():
     assert 'ad' not in aggregate['dic'] and 'nt' not in aggregate['dic'] and 'G' not in aggregate
     operational=BrowserAPI(data,'guest','fixture',{},operational_guest=True).bootstrap()['data']
     assert 'ad' in operational['dic'] and 'nt' in operational['dic']
+    report=build_analysis(data,prepare(data),{},LocalEvents(),'guest')
+    assert report['outstanding']['geography_options']==[]
 
 
 def test_followup_allowed_for_identified_undated_outstanding():
