@@ -3,16 +3,16 @@ require('../web/potential.js');
 const source={reg:['Barat','Timur'],W:[[0,0,1,1,10,3,2,5],[0,0,1,2,20,4,1,8],[0,0,2,1,8,1,0,3],[0,1,1,1,4,1,0,2],[1,2,1,1,9,2,1,4],[0,0,0,0,2,0,0,0]]};
 test('V4 includes out-of-master interest but deducts only matched eligible interest',()=>{
   const data={reg:['Barat'],W:[],G:[[0,0,1,1,3,2,1,1,1],[0,0,0,0,0,1,1,0,0]]};
-  assert.deepEqual(RPDPotential.total(RPDPotential.rows(data,{})),{potential:3,canvassed:3,interested:2,installed:1,remaining:2});
+  assert.deepEqual(RPDPotential.total(RPDPotential.rows(data,{})),{potential:3,canvassed:3,interested:2,installed:1,remaining:2,outstanding:null});
   assert.equal(RPDPotential.total(RPDPotential.rows(data,{rw:0})).interested,1);
 });
 test('geographic hierarchy reconciles from regional stock down to individual RT',()=>{
-  const expected={potential:40,interested:8,installed:3,canvassed:16,remaining:32};
+  const expected={potential:40,interested:8,installed:3,canvassed:16,remaining:32,outstanding:null};
   const scope={reg:'Barat',ab:0,kel:0,rw:-1,rt:-1};
   assert.deepEqual(RPDPotential.total(RPDPotential.rows(source,scope)),expected);
   for(const rw of [0,1,2]){
     const parent=RPDPotential.total(RPDPotential.rows(source,{...scope,rw})),children=RPDPotential.groups(source,{...scope,rw}).rows;
-    for(const key of Object.keys(expected))assert.equal(children.reduce((n,row)=>n+row[key],0),parent[key]);
+    for(const key of Object.keys(expected).filter(key=>key!=='outstanding'))assert.equal(children.reduce((n,row)=>n+row[key],0),parent[key]);
   }
   assert.equal(RPDPotential.total(RPDPotential.rows(source,{...scope,rw:1,rt:2})).remaining,16);
   assert.equal(RPDPotential.groups(source,scope).level,'rw');

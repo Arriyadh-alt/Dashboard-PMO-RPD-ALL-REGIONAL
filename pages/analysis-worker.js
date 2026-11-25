@@ -75,7 +75,7 @@ async function process(message){
     if(message.type==='request'&&url.pathname==='/api/analysis'&&summary&&(message.method||'GET')==='GET'){
       const scope=Object.fromEntries(url.searchParams);scope.statuses=url.searchParams.getAll('status');
       const fast=['ringkasan','kelurahan','data','catatan'].includes(scope.view)||!operational;
-      if(fast&&!scope.coordinator&&!scope.statuses.length){const result=RPDSummary.analyse(summary,scope,initial.events);self.postMessage({id:message.id,ok:true,result});return}
+      if(fast&&!scope.coordinator&&!scope.statuses.length&&!(+scope.rw>=0)&&!(+scope.rt>=0)){const result=RPDSummary.analyse(summary,scope,initial.events);self.postMessage({id:message.id,ok:true,result});return}
     }
     if(!operational||(initial.role!=='owner'&&(message.mutation||message.type==='restore'||url?.pathname.startsWith('/api/admin/')||url?.pathname==='/api/quality')))throw new Error('Akses tidak diizinkan.');
     if(!sourceObject)throw new Error('Muat data operasional terlebih dahulu.');

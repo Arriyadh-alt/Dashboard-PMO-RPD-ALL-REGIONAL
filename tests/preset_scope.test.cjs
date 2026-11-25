@@ -5,7 +5,7 @@ const {test}=require('node:test');
 
 // Execute the production pure helpers without starting their legacy DOM application.
 const source=fs.readFileSync('web/command-center.js','utf8');
-const helpers=source.slice(source.indexOf('function presetScope()'),source.indexOf('\nfunction fill()'));
+const helpers=source.slice(source.indexOf('const scopeKeys ='),source.indexOf('\nconst jakartaDate'))+'\n'+source.slice(source.indexOf('function presetScope()'),source.indexOf('\nfunction fill()'));
 
 function fixture(m0){
   const context={D:{months:['2026-09','2026-10','2026-11'],abs:['A','B'],reg:['West','East'],kels:['KEL A','KEL B'],S:[],dic:{kf:['Done']}},
@@ -15,6 +15,11 @@ function fixture(m0){
   vm.createContext(context);vm.runInContext(helpers,context);
   return context;
 }
+
+test('presets never retain customer search strings',()=>{
+  const context=fixture(0);context.S.out_query='SYNTHETIC-CUSTOMER-SECRET';context.S.oq={query:context.S.out_query};
+  assert.equal(JSON.stringify(context.presetScope()).includes(context.S.out_query),false);
+});
 
 test('bounded start cannot silently become open-ended after an import',()=>{
   const context=fixture(1),saved=context.presetScope();

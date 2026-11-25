@@ -76,6 +76,8 @@ class BrowserAPI:
         source=self.data
         filters={key:integer(raw.get(key,default),low,high) for key,default,low,high in [('m0',0,0,len(source['months'])-1),('m1',len(source['months'])-1,0,len(source['months'])-1),('ab',-1,-1,len(source['abs'])-1),('kel',-1,-1,len(source['kels'])-1)]}
         filters.update({key:text(raw,key,maximum) for key,maximum in [('reg',100),('coordinator',150),('start',10),('end',10)]})
+        filters.update({key: integer(raw.get(key,-1),-1,99) for key in ('rw','rt')})
+        filters.update({key: text(raw,key,maximum) for key,maximum in [('aging_date',10),('snapshot',10),('aging_bucket',30),('out_surveyor',150),('out_obstacle',500),('out_query',150)]})
         statuses=raw.get('statuses',[])
         if not isinstance(statuses,list) or len(statuses)>30 or any(not isinstance(value,str) for value in statuses):
             raise ValueError('Invalid status filter')
@@ -89,7 +91,11 @@ class BrowserAPI:
         if 'G' in source:
             safe['G'] = source['G']
         safe['meta']={key:source['meta'].get(key,[] if key=='korlaps' else {} if key=='sync' else 0) for key in ('tmin','tmax','rows','uniq','sync','korlaps','rt_bad')}
+        for key in ('reporting_date','v5'):
+            if key in source['meta']: safe['meta'][key] = source['meta'][key]
         if self.role!='owner' and not self.operational_guest:
+            safe['dic']={key:value for key,value in source['dic'].items() if key not in ('ad','nt')}
+            safe.pop('G',None)
             safe['svs']=[f'Surveyor {index+1}' for index in range(len(source['svs']))]
         mapping=self.store.history('mapping','all',1)
         overrides=mapping[0]['payload'] if mapping else {}
@@ -113,6 +119,14 @@ class BrowserAPI:
         allowed=('GET','POST') if route.startswith('/api/followups/') else (expected.get(route,'GET'),)
         if method not in allowed: raise ValueError('Invalid local request method')
         if route=='/api/bootstrap': return self.bootstrap()
+        if route=='/api/admin/mapping-validation':
+            from .aging import jakarta_today
+            report=copy.deepcopy(self.data.get('_admin_mapping_report', {}))
+            future=[{'pam':row.get('pd') or row['pam'],'quality':'future','survey_date':row['date'].isoformat()}
+                    for row in self.prepared['rows'] if row['date'] and row['date']>jakarta_today()]
+            report['date_anomalies']=report.get('date_anomalies',[])+future
+            report['reporting_date']=self.data['meta'].get('reporting_date')
+            return report
         if route=='/api/analysis': return build_analysis(self.data,self.prepared,self.scope(raw),self.store,view_role)
         if route=='/api/quality': return {**quality(self.data,self.prepared),'source':self.info}
         if route.startswith('/api/reports/'):
@@ -137,7 +151,7 @@ class BrowserAPI:
             return search_records(source,prepared,filters,overrides,actions,{**body,'offset':offset,'limit':limit})
         if route.startswith('/api/followups/'):
             ref=route.rsplit('/',1)[-1]
-            if not any(row['valid'] and row['ref']==ref for row in prepared['rows']): raise ValueError('Unknown case in current source')
+            if not any(row['valid_location'] and row['pam'] and row['ref']==ref for row in prepared['rows']): raise ValueError('Unknown case in current source')
             if method=='GET':
                 limit=integer(raw.get('limit',100),1,1000);before=integer(raw['before'],1,10**9) if raw.get('before') else None
                 events=store.history('followup',ref,limit,before)

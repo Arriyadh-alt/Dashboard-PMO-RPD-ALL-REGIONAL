@@ -1,13 +1,14 @@
 """Read the verified RPD XLSX/XLSB layout without executing Excel or macros.
 
-Only dashboard-required columns are selected. Names, addresses, telephone numbers,
-identity-document links, coordinates and free-text customer notes are not imported.
+Only dashboard-required columns are selected. V5 explicitly imports the protected
+master address and incomplete-file reason; neither is public. Telephone numbers,
+identity-document links and coordinates are not imported.
 An intake is not a published contract or an assertion of workbook freshness.
 """
 import argparse
 from contextlib import closing, nullcontext
 from collections import Counter
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import hashlib
 import io
 import json
@@ -121,6 +122,42 @@ def excel_date(value, date1904=False):
         raise ValueError('Unexpected date format; review the workbook layout') from error
 
 
+def report_date(value):
+    stamp = re.search(r'(?<!\d)(\d{2})(\d{2})(\d{4})(?!\d)', str(value))
+    if stamp:
+        try:
+            return date(int(stamp[3]), int(stamp[2]), int(stamp[1])).isoformat()
+        except ValueError:
+            pass
+    return None
+
+
+def flexible_date(value, date1904=False):
+    """Jakarta survey calendar date; malformed values stay explicitly invalid."""
+    if not isinstance(value, str):
+        if isinstance(value, datetime) and value.tzinfo:
+            return value.astimezone(timezone(timedelta(hours=7))).date().isoformat()
+        return excel_date(value, date1904)
+    raw = text(value)
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+        if parsed.tzinfo:
+            parsed = parsed.astimezone(timezone(timedelta(hours=7)))
+        return parsed.date().isoformat()
+    except ValueError:
+        pass
+    months = {'januari': 1, 'februari': 2, 'maret': 3, 'april': 4, 'mei': 5,
+              'juni': 6, 'juli': 7, 'agustus': 8, 'september': 9, 'oktober': 10,
+              'november': 11, 'desember': 12}
+    match = re.fullmatch(r'(\d{1,2})[ /.-]+([A-Za-z]+|\d{1,2})[ /.-]+(\d{4})(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?', raw)
+    if match:
+        month = months.get(match[2].casefold(), int(match[2]) if match[2].isdigit() else 0)
+        return date(int(match[3]), month, int(match[1])).isoformat()
+    raise ValueError('Invalid survey date')
+
+
 def cell_rows(sheet):
     if hasattr(sheet, 'iter_rows'):
         for index, row in enumerate(sheet.iter_rows(values_only=True)):
@@ -195,8 +232,9 @@ def reconcile(survey, master):
             'normalized_geography_mismatches': mismatches}
 
 
-def read_intake(path, *, v4=False):
+def read_intake(path, *, v4=False, v5=False):
     """Read cached workbook values. CLI defaults to V4; v2 API stays reproducible."""
+    v4 = v4 or v5
     path = Path(path).resolve()
     if path == ROOT or ROOT in path.parents:
         raise ValueError('Keep plaintext workbooks outside the repository')
@@ -211,6 +249,8 @@ def read_intake(path, *, v4=False):
         date1904 = False
     columns = {'survey': V4_SURVEY_COLUMNS if v4 else SURVEY_COLUMNS,
                'master': V4_MASTER_COLUMNS if v4 else MASTER_COLUMNS}
+    if v5:
+        columns['master'] = {**columns['master'], 'address': 'ALM1_PEL'}
     candidates, position_audit = {'survey': [], 'master': []}, {}
     with book_context as book:
         if not binary:
@@ -227,6 +267,14 @@ def read_intake(path, *, v4=False):
                         candidates[kind].append(name)
                         position_audit[kind] = {key: positions[header(label)] + 1
                                                for key, label in columns[kind].items() if header(label) in positions}
+        if v5 and len(candidates['survey']) > 1:
+            dated = [(report_date(name), name) for name in candidates['survey']]
+            dated = [(stamp, name) for stamp, name in dated if stamp]
+            if dated and sum(stamp == max(dated)[0] for stamp, _ in dated) == 1:
+                candidates['survey'] = [max(dated)[1]]
+                with open_sheet(candidates['survey'][0]) as sheet:
+                    positions = header_positions(next(iter(cell_rows(sheet)))[1])
+                    position_audit['survey'] = {key: positions[header(label)] + 1 for key, label in columns['survey'].items()}
         if any(len(values) != 1 for values in candidates.values()):
             raise ValueError('Missing verified columns or ambiguous survey/master worksheets')
         updates, masters = candidates['survey'], candidates['master']
@@ -245,7 +293,17 @@ def read_intake(path, *, v4=False):
             row['pam_raw'] = raw
     for row in survey:
         for field in ('survey_date', 'fa_date', 'meter_date'):
-            row[field] = excel_date(row[field], date1904)
+            if v5 and field == 'survey_date':
+                raw = row[field]
+                try:
+                    row[field] = flexible_date(raw, date1904)
+                    if row[field] and not 2000<=int(row[field][:4])<=2099:
+                        raise ValueError('Survey date outside established RPD date contract')
+                    row['date_quality'] = 'valid' if row[field] else 'missing'
+                except (ValueError, OverflowError, TypeError):
+                    row[field], row['date_quality'] = None, 'invalid'
+            else:
+                row[field] = flexible_date(row[field], date1904) if v5 else excel_date(row[field], date1904)
     dates = {field: sorted(row[field] for row in survey if row[field])
              for field in ('survey_date', 'fa_date', 'meter_date')}
     summary = {'survey': profile(survey), 'master': profile(master),
@@ -261,7 +319,9 @@ def read_intake(path, *, v4=False):
         for row in survey:
             # Keep only coverage bits, not customer free-text notes/reasons.
             for field in ('admin_note', 'incomplete_reason'):
-                row[field + '_present'] = bool(text(row.pop(field)))
+                row[field + '_present'] = bool(text(row[field]))
+                if not v5 or field == 'admin_note':
+                    row.pop(field)
         summary['column_positions'] = position_audit
         summary['shifted_columns'] = {kind: [key for key, expected in values.items()
             if position_audit[kind].get(key) != expected] for kind, values in VERIFIED_POSITIONS.items()}
@@ -282,10 +342,12 @@ def read_intake(path, *, v4=False):
         summary['master_secondary_id_mismatches'] = sum(bool(text(row['pam_secondary'])) and
             normalize_pam(text(row['pam_secondary'])) != row['pam'] for row in master)
         # The report date is distinct from the last actual survey/event date.
-        stamp = re.search(r'(?<!\d)(\d{2})(\d{2})(\d{4})(?!\d)', path.stem)
-        if stamp:
-            reporting_date = date(int(stamp[3]), int(stamp[2]), int(stamp[1])).isoformat()
-    return {'layout_version': 4 if v4 else 2, 'workbook_sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+        reporting_date = report_date(path.stem) or (report_date(updates[0]) if v5 else None)
+        if v5 and report_date(path.stem) and report_date(updates[0]) and report_date(path.stem) != report_date(updates[0]):
+            raise ValueError('Filename and selected latest worksheet reporting dates disagree')
+    if v5:
+        summary['survey_date_quality'] = dict(Counter(row['date_quality'] for row in survey))
+    return {'layout_version': 5 if v5 else 4 if v4 else 2, 'workbook_sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
             **({'reporting_date': reporting_date} if v4 else {}),
             'sheets': {'survey': updates[0], 'master': masters[0]},
             'date_system': '1904' if date1904 else '1900',
@@ -306,7 +368,8 @@ if __name__ == '__main__':
     parser.add_argument('workbook', type=Path)
     parser.add_argument('private_output', type=Path)
     parser.add_argument('--legacy-layout', action='store_true', help='Reproduce the retained v2 intake only')
+    parser.add_argument('--v4-layout', action='store_true', help='Reproduce the retained V4 intake')
     args = parser.parse_args()
-    intake = read_intake(args.workbook, v4=not args.legacy_layout)
+    intake = read_intake(args.workbook, v4=not args.legacy_layout, v5=not (args.legacy_layout or args.v4_layout))
     write_private(args.private_output, intake)
     print(json.dumps(intake['summary'], ensure_ascii=False, indent=2))

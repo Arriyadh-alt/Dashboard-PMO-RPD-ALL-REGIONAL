@@ -39,6 +39,12 @@ def report_table(kind, analysis, data, prepared, filters, store, role):
             for entry in analysis["teams"]]
     if role != "owner":
         return ["Source installation status", "Outstanding survey rows"], list(analysis["outstanding"]["by_status"].items())
+    if data['meta'].get('v5'):
+        from .aging import records
+        selected=records(data, prepared, filters, store.latest('mapping').get('all',{}), store.latest('followup'))
+        selected.sort(key=lambda row:(row['survey_age_days'] is None,-(row['survey_age_days'] or 0),row['pam']))
+        fields=('pam','regional','area','kelurahan','rw','rt','surveyor','survey_date','survey_age_days','file_status','obstacle','notes','aging_bucket','aging_as_of')
+        return ['PAM ID','Regional','Area Bisnis','Kelurahan','RW','RT','Nama Surveyor','Tanggal Survey','Aging Sejak Survey (Hari)','Status Berkas','Kendala','Keterangan','Kategori Aging','Aging per'], [[row.get(key) if row.get(key) is not None else 'Tanggal Belum Valid' for key in fields] for row in selected]
     overrides = store.latest("mapping").get("all", {})
     actions = store.latest("followup")
     selected = scoped_rows(data, prepared, filters, overrides)
@@ -89,6 +95,10 @@ def report_content(kind, extension, analysis, data, prepared, filters, store, ro
                 DEFINITION, scope["history"], "Role: " + (account_role or role)]
     if source.get('history_locked'):
         metadata.append('Local operational history unavailable: previous password required. Source-only calculations; saved history has not been applied.')
+    if kind=='outstanding' and data['meta'].get('v5'):
+        out=analysis['outstanding']
+        metadata.extend(['Update Data: '+str(out['reporting_date']), 'Aging per: '+out['aging_as_of']+' (Asia/Jakarta)',
+                         'Kategori aging: '+(filters.get('aging_bucket') or 'Semua'), out['aging_rule']])
     return headers, rows, metadata
 
 

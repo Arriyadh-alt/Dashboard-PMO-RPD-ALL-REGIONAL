@@ -256,3 +256,15 @@ Tests use a deliberately synthetic source with duplicate PAM IDs, conflicting ge
 ```
 
 Fixture account names are `fixture-admin` and `fixture-viewer`. Use generated temporary values, never real production passwords, and label the test server through `RPD_DATA_OWNER="SYNTHETIC TEST DATA — not production"`. Fixture checks do not certify real customer data, credentials or production operation.
+
+## V5 geographic layering and survey-calendar aging
+
+Daily intake defaults to V5 (`--v4-layout` retains reproducible V4 imports). It discovers the latest uniquely dated survey sheet, rejects contradictory reporting dates, and left-joins normalized PAM IDs without removing survey or master stock. Master RT/RW is primary; only unambiguous explicit RT/RW address labels fill missing values. Survey D/E/I remains the operational territory; Master territory is preserved for stock and discrepancy review. Duplicate normalized identities reject publication. PAM_ID2 differences are reported, never assumed to be verified aliases.
+
+Protected records now include Master addresses, RW/RT and incomplete-file reasons. Public aggregates include none of these. `_admin_mapping_report` is excluded from the Guest ciphertext, not merely hidden by the UI. Pages still has no trusted server authorization: Guest cannot change repository/shared data, but local browser restrictions are not a server security boundary. Previously downloaded data cannot be revoked.
+
+V5 RW/RT operational detail also retains survey rows without valid dates, with an explicit missing/invalid-date label, so they do not disappear between geographic counts and PAM detail. Known dates still follow date filters; undated cases remain visible. Date-based cohort KPI calculations are unchanged.
+
+“Aging Sejak Survey” uses calendar days in Asia/Jakarta, independent of upload/deployment/login dates. Midnight refresh changes the reference date without importing data. Missing, invalid and future-relative survey dates stay in Total Outstanding but outside average/maximum aging, in a separate gray bucket. Thresholds are monitoring categories, not approved SLAs. Manual case starts/pauses remain separate operational follow-ups and never replace the survey-date aging formula or imported status.
+
+Outstanding report snapshots are encrypted and keyed by actual workbook reporting date. The first V5 import seeds one real snapshot; it does not invent previous status history. Later reports retain prior Outstanding rows and classify actual PAM-ID transitions (Assign FA, Done, Cancel and other outcomes separately). Re-importing the same report date replaces that date, not a fabricated new daily snapshot. Historical reference dates without a selected old snapshot explicitly use the latest imported population. Exports share the table’s reference date, geographic/category filters and search.

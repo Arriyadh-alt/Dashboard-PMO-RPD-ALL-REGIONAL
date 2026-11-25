@@ -1,5 +1,5 @@
 /* Same-origin API only. Customer rows and credentials are never persisted in the browser. */
-let A = null, CSRF = '', SOURCE = {}, CAP = {}, BOOT = {}, QUALITY = null, ADMIN = null;
+let A = null, CSRF = '', SOURCE = {}, CAP = {}, BOOT = {}, QUALITY = null, ADMIN = null, MAPPING = null;
 let analysisRevision = 0, viewRevision = 0, searchRevision = 0, searchTimer, PAGE = 0;
 let CURRENT_ROWS = [], CASE = null, caseReturnFocus = null, regionSort = 'installation_rate', trendUnit = 'monthly';
 let renderedTab='';const legacyPanels=new Map();
@@ -14,7 +14,8 @@ const percent = value => value == null ? unavailable : PC(value);
 const number = value => value == null ? unavailable : N(value);
 const timeLabel = value => value ? new Intl.DateTimeFormat('id-ID',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)) : unavailable;
 const scopeKeys = ['m0','m1','reg','ab','kel','coordinator','statuses','start','end'];
-const scopeObject = () => Object.fromEntries(scopeKeys.map(key=>[key,S[key]]).filter(([,value])=>value!==''));
+const jakartaDate = () => new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const scopeObject = () => ({...Object.fromEntries([...scopeKeys,...(D?.meta?.v5&&['outstanding','kelurahan','data'].includes(S.tab)?['rw','rt']:[])].map(key=>[key,S[key]]).filter(([,value])=>value!==''&&value!==undefined)),...(S.tab==='outstanding'?{aging_date:S.aging_date||jakartaDate(),snapshot:S.snapshot||'',aging_bucket:S.aging_bucket||'',out_surveyor:S.out_surveyor||'',out_obstacle:S.out_obstacle||'',out_query:S.oq?.query||''}:{})});
 const params = () => {const p=new URLSearchParams();for(const [key,value] of Object.entries(scopeObject())){if(key==='statuses')value.forEach(status=>p.append('status',status));else p.set(key,value)}return p};
 const notice = (message,warning=false) => `<p class="scope-note${warning?' warning':''}">${esc(message)}</p>`;
 const blank = (title,message) => `<section class="empty-state"><h2>${esc(title)}</h2><p>${esc(message)}</p></section>`;
@@ -43,9 +44,10 @@ async function download(path, filename) {
 function init(payload) {
   BOOT=payload;D=payload.data;ROLE=payload.role;CSRF=payload.csrf;SOURCE=payload.source;CAP=payload.capabilities;OV=payload.overrides;WM=null;
   Object.assign(S,{m0:0,m1:D.months.length-1,reg:'',ab:-1,kel:-1,rw:-1,rt:-1,coordinator:'',statuses:[],start:'',end:'',tab:'ringkasan',q:'',open:'',all:0,advanced:false});
+  Object.assign(S,{aging_date:'',snapshot:'',aging_bucket:'',out_surveyor:'',out_obstacle:'',oq:{query:'',sort:'survey_age_days',descending:true}});MAPPING=null;
   window.RPDPublic?.hide();
   $('#lg').hidden=true;$('#app').hidden=false;$('#out').hidden=false;$('#role').textContent=ROLE==='owner'?'Admin':'Guest';
-  $('#sub').textContent=(D.meta.reporting_date?'Laporan '+fd(D.meta.reporting_date)+' · ':'')+'Tanggal survei: '+fd(D.meta.tmin)+' – '+fd(D.meta.tmax);
+  $('#sub').textContent=(D.meta.reporting_date?'Update Data: '+fd(D.meta.reporting_date)+' · ':'')+'Tanggal Survey: '+fd(D.meta.tmin)+' – '+fd(D.meta.tmax);
   $('#tab-catatan').hidden=ROLE!=='owner';document.querySelector('.export-menu').hidden=!CAP.customer_detail;
   for(const tab of ['korlap','outstanding','data'])$('#tab-'+tab).hidden=!CAP.customer_detail;
   try{const saved=JSON.parse(sessionStorage.getItem('rpd_session_scope')||'null'),scope=resolvePreset(saved);if(scope)Object.assign(S,scope)}catch{}
@@ -57,7 +59,7 @@ function localLogout() {
   S.dq={p:'',k:'',s:'',c:0,f:0,r:0};
   window.RPDStatic?.stop();
   analysisRevision++;viewRevision++;searchRevision++;clearTimeout(searchTimer);
-  D=REC=WM=A=QUALITY=ADMIN=null;OV={};ROLE=CSRF='';SOURCE=CAP=BOOT={};CURRENT_ROWS=[];CASE=null;PAGE=0;grids.clear();gridStates.clear();legacyPanels.clear();renderedTab='';
+  D=REC=WM=A=QUALITY=ADMIN=MAPPING=null;OV={};ROLE=CSRF='';SOURCE=CAP=BOOT={};CURRENT_ROWS=[];CASE=null;PAGE=0;grids.clear();gridStates.clear();legacyPanels.clear();renderedTab='';
   const dialog=$('#case-dialog');if(dialog?.open)dialog.close();if(dialog)dialog.remove();
   try{sessionStorage.removeItem('rpd_session_scope')}catch{}
   $('#main').innerHTML='';$('#app').hidden=true;$('#lg').hidden=false;$('#out').hidden=true;$('#lb').disabled=false;$('#lb').textContent='Masuk';$('#li').value='';$('#lp').value='';$('#le').textContent='';$('#sub').textContent='';setStatus('');$('#li').focus();
@@ -93,7 +95,7 @@ function presetList() {try{const data=JSON.parse(localStorage.getItem('rpd_filte
 function savePresetList(value){try{localStorage.setItem('rpd_filter_presets',JSON.stringify(value))}catch{setStatus('Preset tidak dapat disimpan pada peramban ini.')}}
 
 function presetScope(){
-  return {version:2,scope:scopeObject(),field:{rw:S.rw??-1,rt:S.rt??-1},period:[D.months[S.m0],D.months[S.m1]],openingBucket:S.m0===0,areaKey:S.ab>=0?BOOT.area_keys[S.ab]:null,kelName:S.kel>=0?D.kels[S.kel]:null};
+  return {version:2,scope:Object.fromEntries(scopeKeys.map(key=>[key,S[key]])),field:{rw:S.rw??-1,rt:S.rt??-1},period:[D.months[S.m0],D.months[S.m1]],openingBucket:S.m0===0,areaKey:S.ab>=0?BOOT.area_keys[S.ab]:null,kelName:S.kel>=0?D.kels[S.kel]:null};
 }
 
 function resolvePreset(value){
@@ -246,18 +248,18 @@ function potentialView(){
     rtOptions=[{value:-1,label:'Semua RT'},...rts.map(value=>({value,label:neighborhood('RT',value)}))];
   const selected=RPDPotential.rows(D,S),totals=RPDPotential.total(selected),grouped=RPDPotential.groups(D,S),
     drill=(row,label)=>`<button data-field-drill="${grouped.level}" data-field-ab="${row.ab}" data-field-kel="${row.kel}" data-field-rw="${row.rw}" data-field-rt="${row.rt}">${esc(label)}</button>`;
-  const headers=[...(grouped.level==='kel'?['Kelurahan','Area Bisnis']:[]),'RW','RT','Potensi','Canvassing','Berminat','Terpasang','Sisa'];
+  const headers=[...(grouped.level==='kel'?['Kelurahan','Area Bisnis']:[]),'RW','RT','Potensi','Canvassing','Berminat','Terpasang','Sisa','Outstanding'];
   const cells=grouped.rows.map(row=>[
     ...(grouped.level==='kel'?[drill(row,D.kels[row.kel]),esc(D.abs[row.ab])]:[]),
     grouped.level==='kel'?'–':grouped.level==='rw'?drill(row,neighborhood('RW',row.rw)):esc(neighborhood('RW',row.rw)),
     grouped.level==='rt'?drill(row,neighborhood('RT',row.rt)):'Semua RT',
-    ...['potential','canvassed','interested','installed','remaining'].map(key=>row[key]==null?'Belum tersedia':N(row[key]))]);
+    ...['potential','canvassed','interested','installed','remaining','outstanding'].map(key=>row[key]==null?'Belum tersedia':N(row[key]))]);
   return `<section class="potential-panel"><div class="section-heading"><h2>Cek Potensi Wilayah</h2><span class="report-badge">Stok master · seluruh periode</span></div><div class="potential-filters"><details class="potential-context"${S.kel<0||!matchMedia('(max-width:600px)').matches?' open':''}><summary>${S.kel>=0?esc(D.kels[S.kel])+' · Ubah Wilayah':'Pilih Wilayah'}</summary><div class="potential-context-fields">`+
     select('reg','Regional',regions,S.reg)+select('ab','Area Bisnis',areas,S.ab)+select('kel','Kelurahan',kels,S.kel,S.ab<0)+'</div></details><div class="potential-neighborhood">'+
     select('rw','RW',rwOptions,S.rw,S.kel<0)+select('rt','RT',rtOptions,S.rt,S.rw<0)+'<button id="reset-potential" type="button">Reset Filter</button></div></div>'+
-    '<div class="intel-kpis potential-kpis">'+[['potential','Total Potensi'],['canvassed','Tercanvassing'],['interested','Berminat'],['installed','Terpasang'],['remaining','Sisa Potensi']].map(([key,label])=>`<article class="intel-card"><span class="metric-label">${label}</span><strong class="metric-value${totals[key]==null?' unavailable':''}">${totals[key]==null?'Belum tersedia':N(totals[key])}</strong></article>`).join('')+'</div>'+
-    '<p class="scope-caption">'+(D.G?'Tercanvassing, Berminat dan Terpasang: seluruh survei, termasuk RT/RW Belum Terpetakan. Potensi: FINAL FLAG = POTENSI di master. Sisa = Potensi − Berminat yang cocok pada stok master; bukan dikurangi seluruh Berminat.':'Sumber lama: kinerja hanya pada potensi master yang cocok; belum mencakup seluruh survei. Sisa = Potensi − Berminat master.')+' Seluruh periode; filter tim/status tidak mengubah cakupan ini.</p>'+
-    `<div class="potential-table">${dataTable(headers,cells,'Tidak ada potensi pada wilayah ini.')}</div></section>`;
+    '<div class="intel-kpis potential-kpis">'+[['potential','Total Potensi'],['canvassed','Tercanvassing'],['interested','Berminat'],['installed','Terpasang'],['remaining','Sisa Potensi'],['outstanding','Outstanding']].map(([key,label])=>`<article class="intel-card"><span class="metric-label">${label}</span><strong class="metric-value${totals[key]==null?' unavailable':''}">${totals[key]==null?'Belum tersedia':N(totals[key])}</strong></article>`).join('')+'</div>'+
+    '<details class="calculation-info"><summary>Informasi perhitungan</summary><p>Seluruh periode. Wilayah operasional mengikuti Update; RT/RW dan alamat dari pelanggan yang cocok di Master. Potensi mengikuti FINAL FLAG = POTENSI; Sisa dikurangi Berminat yang cocok pada stok master. Tim/status tidak mengubah stok ini. RT/RW yang belum memiliki sumber valid tetap belum terpetakan.</p></details>'+
+    `<div class="potential-table">${dataTable(headers,cells,'Tidak ada data pada wilayah ini.')}</div>${S.rt>=0?(D.meta.v5?'<h3>Data Operasional RT</h3><div id="field-records">'+skeleton()+'</div>':'<p>Daftar PAM per RT memerlukan impor V5. Potensi master tetap ditampilkan di atas.</p>'):''}</section>`;
 }
 
 function vTeam() {
@@ -270,6 +272,7 @@ function vTeam() {
 
 function vOutstanding() {
   const out=A.outstanding;
+  if(out.aging_model==='survey_calendar_jakarta')return vSurveyOutstanding(out);
   return `<h2>Intervensi pemasangan</h2><div class="compact-stats"><div class="compact-stat"><span>Outstanding · status sumber AI</span><strong>${N(out.survey_rows)}</strong></div><div class="compact-stat"><span>Antrean aktif · Assign FA + Outstanding</span><strong>${N(out.active_pipeline_customers)}</strong></div><div class="compact-stat"><span>Aging belum terverifikasi</span><strong>${N(out.aging['Insufficient Data'])}</strong></div></div>`+
   `<div class="intel-panels"><section class="panel"><h2>Status asli sumber</h2>${dataTable(['Konfirmasi pemasangan','Baris sumber'],Object.entries(out.by_status).map(([status,count])=>[esc(status),N(count)]))}<h2>Outstanding per regional</h2>${dataTable(['Regional','Baris sumber'],Object.entries(out.by_region).map(([region,count])=>[esc(region),N(count)]))}</section><section class="panel"><h2>Aging terverifikasi</h2>${dataTable(['Hari','Referensi kasus'],Object.entries(out.aging).map(([age,count])=>[esc(age),N(count)]))}<p class="footer-definition">Per ${esc(out.aging_as_of)}. ${esc(out.aging_rule)} Status manual tidak menimpa status sumber.</p></section></div>`+
   '<section class="panel"><h2>Rincian dalam populasi Outstanding</h2>'+dataTable(['Flag Kendala','Jumlah'],Object.entries(out.by_obstacle||{}).map(([label,count])=>[esc(label),N(count)]))+dataTable(['Status Berkas','Jumlah'],Object.entries(out.by_file_status||{}).map(([label,count])=>[esc(label),N(count)]))+dataTable(['Flag Illegal · kategori asli','Jumlah'],Object.entries(out.by_illegal_flag||{}).map(([label,count])=>[esc(label),N(count)]))+'<p class="mu sm">Kategori dapat tumpang tindih; jangan dijumlahkan lintas tabel. Case Closed bukan illegal aktif. Catatan admin terisi: '+N(out.support_coverage?.admin_notes||0)+'; alasan tidak lengkap terisi: '+N(out.support_coverage?.incomplete_reasons||0)+'. Teks pribadi tidak dipublikasikan.</p></section>'+
@@ -278,24 +281,65 @@ function vOutstanding() {
   (CAP.customer_detail?`<h2>Daftar Tindak Lanjut</h2><p class="mu sm">Buka referensi kasus untuk PIC, aksi, tenggat, catatan resolusi dan riwayat append-only.</p><div id="case-table">${skeleton()}</div>`:blank('Detail kasus dibatasi','Peran ini hanya mengakses ringkasan agregat. Administrator diperlukan untuk PAM ID dan pencatatan tindak lanjut.'));
 }
 
+function vSurveyOutstanding(out){
+  const labels=['Baru','Pemantauan','Perlu Tindak Lanjut','Prioritas','Prioritas Tinggi','Kritis','Tanggal Belum Valid'],colors=['#23834a','#79a944','#b88708','#dd7624','#d34848','#8c242c','#858b95'];
+  const select=(id,label,items,value)=>`<label class="field">${label}<select id="${id}">${items.map(([v,l])=>option(v,l,String(v)===String(value))).join('')}</select></label>`;
+  const geo=out.geography_options?out.geography_options.map(([reg,ab,kel,rw,rt])=>[D.abs.findIndex((name,i)=>name===ab&&D.reg[i]===reg),D.kels.indexOf(kel),rw,rt]):RPDPotential.allRows(D),parent=geo.filter(r=>(!S.reg||D.reg[r[0]]===S.reg)&&(S.ab<0||r[0]===S.ab)&&(S.kel<0||r[1]===S.kel));
+  const kels=[...new Set(geo.filter(r=>(!S.reg||D.reg[r[0]]===S.reg)&&(S.ab<0||r[0]===S.ab)).map(r=>r[1]))].sort((a,b)=>D.kels[a].localeCompare(D.kels[b],'id'));
+  const numbers=kind=>[[-1,'Semua '+kind.toUpperCase()],...[...new Set(parent.filter(r=>kind==='rw'||S.rw<0||r[2]===S.rw).map(r=>r[kind==='rw'?2:3]))].sort((a,b)=>a-b).map(n=>[n,n?String(n).padStart(3,'0'):'Belum Terpetakan'])];
+  const avg=n=>n==null?'Belum tersedia':new Intl.NumberFormat('id-ID',{maximumFractionDigits:1}).format(n);
+  const cards=[['Total Outstanding',N(out.survey_rows)],['Rata-rata Aging',avg(out.average_aging)],['Aging Terlama',number(out.maximum_aging)],['Outstanding > 30 Hari',N(out.over_30)],['Outstanding > 90 Hari',N(out.over_90)]];
+  const highest=Math.max(1,...Object.values(out.aging));
+  return `<div class="aging-dates"><span>Update Data: <strong>${esc(fd(out.reporting_date))}</strong></span><span>Aging per: <strong>${esc(fd(out.aging_as_of))}</strong> · Asia/Jakarta</span></div>`+
+    `<div class="aging-controls"><label class="field">Aging per<input id="aging-date" type="date" value="${esc(out.aging_as_of)}" max="${jakartaDate()}"></label><button id="aging-today" type="button">Hari ini (otomatis)</button>`+
+    select('aging-snapshot','Status dari laporan',out.available_snapshots.map(stamp=>[stamp,fd(stamp)]),S.snapshot||out.reporting_date)+'</div>'+
+    `<p class="scope-caption">Status mengikuti laporan ${esc(fd(out.reporting_date))}, bukan pembaruan status langsung. ${!S.snapshot?'Tanggal acuan historis tetap memakai populasi impor terbaru.':'Populasi sesuai snapshot laporan yang dipilih.'}</p>`+
+    '<div class="intel-kpis aging-kpis">'+cards.map(([title,value])=>`<article class="intel-card"><span class="metric-label">${title}</span><strong class="metric-value">${value}</strong></article>`).join('')+'</div>'+
+    `<p class="scope-caption">${N(out.excluded_dates)} tanggal belum valid dikecualikan dari rata-rata dan aging terlama, tetap termasuk Total Outstanding.</p>`+
+    `<details class="out-filter-panel" open><summary>Filter wilayah &amp; petugas</summary><div class="out-filters">`+
+    select('outg-reg','Regional',[['','Semua regional'],...[...new Set(D.reg)].sort().map(v=>[v,v])],S.reg)+
+    select('outg-ab','Area Bisnis',[[-1,'Semua area'],...D.abs.flatMap((v,i)=>!S.reg||D.reg[i]===S.reg?[[i,v+' · '+D.reg[i]]]:[])],S.ab)+
+    select('outg-kel','Kelurahan',[[-1,'Semua kelurahan'],...kels.map(i=>[i,D.kels[i]])],S.kel)+
+    select('outg-rw','RW',numbers('rw'),S.rw)+select('outg-rt','RT',numbers('rt'),S.rt)+
+    select('out-surveyor','Surveyor',[['','Semua surveyor'],...D.svs.map(v=>[v,v])],S.out_surveyor)+
+    select('out-obstacle','Kendala',[['','Semua kendala'],...D.dic.kd.filter(Boolean).map(v=>[v,v])],S.out_obstacle)+
+    '<label class="field">Tanggal Survey mulai<input id="fstart" type="date" value="'+esc(S.start)+'"></label><label class="field">Tanggal Survey akhir<input id="fend" type="date" value="'+esc(S.end)+'"></label></div></details>'+
+    `<section class="panel aging-panel"><div class="section-heading"><h2>Distribusi Aging Sejak Survey</h2><button data-aging-bucket="">Semua kategori</button></div><div class="aging-chart">`+
+    Object.entries(out.aging).map(([bucket,count],i)=>`<button type="button" class="aging-bar" data-aging-bucket="${esc(bucket)}" aria-pressed="${S.aging_bucket===bucket}" style="--aging-color:${colors[i]}"><span>${labels[i]}${i<6?' · '+bucket+' hari':''}</span><span class="aging-track"><i style="width:${count/highest*100}%"></i></span><strong>${N(count)}</strong></button>`).join('')+'</div><details class="calculation-info"><summary>Informasi perhitungan</summary><p>'+esc(out.aging_rule)+' Tanggal Survey setelah tanggal acuan termasuk anomali, bukan aging nol. Tindak lanjut manual tidak mengubah status impor.</p></details></section>'+
+    `<h2>Detail Outstanding${S.aging_bucket?' · '+esc(S.aging_bucket)+' hari':''}</h2><div id="case-table">${skeleton()}</div>`+
+    `<details class="legacy-report"><summary>Perbandingan laporan &amp; perubahan status</summary>${out.comparison?dataTable(['Metrik','Laporan '+fd(out.reporting_date),'Sebelumnya '+fd(out.comparison.reporting_date),'Perubahan'],[
+      ['Outstanding',N(out.survey_rows),N(out.comparison.survey_rows),N(out.survey_rows-out.comparison.survey_rows)],
+      ['Rata-rata aging',avg(out.average_aging),avg(out.comparison.average_aging),out.average_aging!=null&&out.comparison.average_aging!=null?avg(out.average_aging-out.comparison.average_aging):'Belum tersedia'],
+      ...Object.keys(out.aging).map(key=>[esc(key)+' hari',N(out.aging[key]),N(out.comparison.aging[key]||0),N(out.aging[key]-(out.comparison.aging[key]||0))])])+`<p class="scope-caption">Aging sebelumnya dihitung per ${esc(fd(out.comparison.aging_as_of))}; saat ini per ${esc(fd(out.aging_as_of))}.</p>`:'<p>Belum ada laporan sebelumnya yang tervalidasi. Snapshot ditambahkan saat file laporan berikutnya diimpor; tanggal historis tidak direkonstruksi.</p>'}${out.transitions?'<h3>Transisi PAM ID · nasional</h3>'+dataTable(['Perubahan','PAM ID'],[['Baru Outstanding',N(out.transitions.new)],['Tetap Outstanding',N(out.transitions.remaining)],['Tidak lagi Outstanding',N(out.transitions.no_longer)],['Menjadi Assign FA',N(out.transitions.assign_fa)],['Menjadi Terpasang',N(out.transitions.installed)],['Menjadi Cancel',N(out.transitions.cancel)],['Status lain/tidak tersedia',N(out.transitions.other_or_absent)]]):''}</details>`+
+    '<details class="legacy-report"><summary>Rincian kendala &amp; berkas</summary>'+dataTable(['Kendala','Jumlah'],Object.entries(out.by_obstacle).map(([k,v])=>[esc(k),N(v)]))+dataTable(['Status Berkas','Jumlah'],Object.entries(out.by_file_status).map(([k,v])=>[esc(k),N(v)]))+dataTable(['Flag Illegal','Jumlah'],Object.entries(out.by_illegal_flag).map(([k,v])=>[esc(k),N(v)]))+'<p class="scope-caption">Kategori pendukung dapat tumpang tindih; jangan dijumlahkan. Case Closed bukan illegal aktif.</p></details>';
+}
+
+function outstandingTable(rows){
+  const headings=[['pam','PAM ID'],['regional','Regional'],['area','Area Bisnis'],['kelurahan','Kelurahan'],['rw','RW'],['rt','RT'],['surveyor','Nama Surveyor'],['survey_date','Tanggal Survey'],['survey_age_days','Aging (Hari)'],['file_status','Status Berkas'],['obstacle','Kendala'],['notes','Keterangan']],q=S.oq;
+  const cells=rows.map((r,i)=>[`<button data-case="${i}">${esc(r.pam)}</button>`,esc(r.regional),esc(r.area),esc(r.kelurahan),r.rw?String(r.rw).padStart(3,'0'):'–',r.rt?String(r.rt).padStart(3,'0'):'–',esc(r.surveyor),r.survey_date?esc(fd(r.survey_date)):r.survey_date_quality==='missing'?'Tanggal Survey Belum Tersedia':'Tanggal Belum Valid',r.survey_age_days==null?'<span class="mu">Tanggal Belum Valid</span>':N(r.survey_age_days),esc(r.file_status||'–'),esc(r.obstacle||'–'),esc(r.notes||'–')]);
+  return `<div class="tw operational-scroll" tabindex="0" role="region" aria-label="Detail Outstanding, geser untuk melihat semua kolom"><table class="report-table operational-table"><thead><tr>${headings.map(([key,title])=>`<th aria-sort="${q.sort===key?(q.descending?'descending':'ascending'):'none'}"><button data-case-sort="${key}">${title} ${q.sort===key?(q.descending?'↓':'↑'):'↕'}</button></th>`).join('')}</tr></thead><tbody>${cells.length?cells.map(row=>'<tr>'+row.map(cell=>'<td>'+cell+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="12">Tidak ada Outstanding dalam filter ini.</td></tr>'}</tbody></table></div>`;
+}
+
 function vData() {
   if(!CAP.customer_detail)return blank('Akses dibatasi','Halaman ini hanya untuk Admin.');
   const q=S.dq,opts=(values,selected,title)=>values.map((value,index)=>option(index,index?value:title,index===selected)).join('');
-  return `<h2>Pencarian PAM ID</h2><p class="mu sm">Pencarian dilakukan ${window.RPDStatic?'lokal di perangkat ini':'di server'} dan mengikuti seluruh filter global. PAM ID dapat dicari dari digit awal; data sumber tidak memuat nama, alamat atau telepon pelanggan.</p><div class="fl data-filters"><input id="qp" placeholder="PAM ID" value="${esc(q.p)}" inputmode="numeric" aria-label="PAM ID"><input id="qk" placeholder="Kelurahan" value="${esc(q.k)}" aria-label="Kelurahan"><input id="qs" placeholder="Surveyor" value="${esc(q.s)}" aria-label="Surveyor"><select id="qc" aria-label="Hasil canvassing">${opts(D.dic.c1,q.c,'Semua hasil canvassing')}</select><select id="qf" aria-label="Status pemasangan">${opts(D.dic.kf,q.f,'Semua status pemasangan')}</select><select id="qr" aria-label="Status potensi">${opts(D.dic.pr,q.r,'Semua status potensi')}</select></div><div id="case-table">${skeleton()}</div>`;
+  return `<h2>Pencarian PAM ID</h2><p class="mu sm">PAM ID dapat dicari dari digit awal dan mengikuti filter laporan.${D.meta.v5?' Alamat Master tersedia melalui Lihat Detail.':' Nama, alamat dan telepon tidak tersedia pada sumber ini.'}</p><div class="fl data-filters"><input id="qp" placeholder="PAM ID" value="${esc(q.p)}" inputmode="numeric" aria-label="PAM ID"><input id="qk" placeholder="Kelurahan" value="${esc(q.k)}" aria-label="Kelurahan"><input id="qs" placeholder="Surveyor" value="${esc(q.s)}" aria-label="Surveyor"><select id="qc" aria-label="Hasil canvassing">${opts(D.dic.c1,q.c,'Semua hasil canvassing')}</select><select id="qf" aria-label="Status pemasangan">${opts(D.dic.kf,q.f,'Semua status pemasangan')}</select><select id="qr" aria-label="Status potensi">${opts(D.dic.pr,q.r,'Semua status potensi')}</select></div><div id="case-table">${skeleton()}</div>`;
 }
 
-function caseSearchControl(){return `<div class="table-controls"><input id="case-search" type="search" maxlength="150" aria-label="Cari di seluruh hasil" placeholder="Cari di seluruh hasil" value="${esc(S.dq.query||'')}"></div>`}
+const recordQuery=()=>S.tab==='outstanding'&&A?.outstanding.aging_model?S.oq:S.dq;
+function caseSearchControl(){return `<div class="table-controls"><input id="case-search" type="search" maxlength="150" aria-label="Cari di seluruh hasil" placeholder="Cari di seluruh hasil" value="${esc(recordQuery().query||'')}"></div>`}
 
 async function dt() {
-  if(!CAP.customer_detail||!['data','outstanding'].includes(S.tab))return;
-  const revision=++searchRevision,tab=S.tab,container=$('#case-table');if(!container)return;
-  const q=S.dq,body={scope:scopeObject(),pam:tab==='data'?q.p:'',kelurahan:tab==='data'?q.k:'',surveyor:tab==='data'?q.s:'',canvassing:tab==='data'?q.c:0,installation:tab==='data'?q.f:0,potential:tab==='data'?q.r:0,outstanding_only:tab==='outstanding',offset:PAGE*PAGE_SIZE,limit:PAGE_SIZE};
+  if(!CAP.customer_detail||!['data','outstanding','kelurahan'].includes(S.tab))return;
+  const revision=++searchRevision,tab=S.tab,container=$(tab==='kelurahan'?'#field-records':'#case-table');if(!container)return;
+  const q=recordQuery(),body={scope:scopeObject(),pam:tab==='data'?q.p:'',kelurahan:tab==='data'?q.k:'',surveyor:tab==='data'?q.s:'',canvassing:tab==='data'?q.c:0,installation:tab==='data'?q.f:0,potential:tab==='data'?q.r:0,outstanding_only:tab==='outstanding',offset:PAGE*PAGE_SIZE,limit:PAGE_SIZE};
   Object.assign(body,{query:(q.query||'').slice(0,150),sort:q.sort||'',descending:!!q.descending});
   container.setAttribute('aria-busy','true');
   try {const result=await api('/api/records/search',{method:'POST',body:JSON.stringify(body)});if(revision!==searchRevision||S.tab!==tab)return;CURRENT_ROWS=result.rows;
     const focus=document.activeElement?.id==='case-search',cursor=focus?document.activeElement.selectionStart:null;
     container.innerHTML=caseSearchControl()+`<div class="pagination"><span>${N(result.total)} baris cocok · halaman ${PAGE+1}</span><div><button id="page-prev"${PAGE===0?' disabled':''}>Sebelumnya</button> <button id="page-next"${result.offset+result.limit>=result.total?' disabled':''}>Berikutnya</button></div></div>`+
-    dataTable(['PAM ID / kasus','Tanggal survei','Regional / area / kelurahan','Surveyor / koordinator','Hasil canvassing','Status sumber','FA / pemasangan','Kendala','Flag / potensi / pelanggan','Tunggakan (Rp)','Tindak lanjut'],result.rows.map((row,index)=>[`<button data-case="${index}">${esc(row.pam)}</button><small class="mu">${esc(row.ref)}</small>`,esc(row.survey_date),`${esc(row.regional)} / ${esc(row.area)} / ${esc(row.kelurahan)}`,`${esc(row.surveyor)} / ${esc(row.coordinator)}`,esc(row.canvassing),esc(row.status),`${esc(row.fa_date||'–')} / ${esc(row.installation_date||'–')}`,esc(row.obstacle||'–'),`${esc(row.master_flag||'–')} / ${esc(row.potential_status||'–')} / ${esc(row.customer_status||'–')}`,number(row.arrears),row.followup?`${esc(row.followup.pic)}<br>${esc(row.followup.status)}<br>${esc(row.followup.target_date||'Tanpa tenggat')}`:'Belum dicatat']),undefined,true);
+    dataTable(['PAM ID / kasus','Tanggal survei','Regional / area / kelurahan','Surveyor / koordinator','Hasil canvassing','Status sumber','FA / pemasangan','Kendala','Flag / potensi / pelanggan','Tunggakan (Rp)','Tindak lanjut'],result.rows.map((row,index)=>[`<button data-case="${index}">${esc(row.pam)}</button><small class="mu">${esc(row.ref)}</small>`,esc(row.survey_date||(row.survey_date_quality==='invalid'?'Tanggal Survey Tidak Valid':'Tanggal Survey Belum Tersedia')),`${esc(row.regional)} / ${esc(row.area)} / ${esc(row.kelurahan)}`,`${esc(row.surveyor)} / ${esc(row.coordinator)}`,esc(row.canvassing),esc(row.status),`${esc(row.fa_date||'–')} / ${esc(row.installation_date||'–')}`,esc(row.obstacle||'–'),`${esc(row.master_flag||'–')} / ${esc(row.potential_status||'–')} / ${esc(row.customer_status||'–')}`,number(row.arrears),row.followup?`${esc(row.followup.pic)}<br>${esc(row.followup.status)}<br>${esc(row.followup.target_date||'Tanpa tenggat')}`:'Belum dicatat']),undefined,true);
+    if(tab==='outstanding'&&A.outstanding.aging_model){const old=container.querySelector('.tw');if(old)old.outerHTML=outstandingTable(result.rows)}
     if(focus){const input=$('#case-search');input.focus();input.setSelectionRange(cursor,cursor)}
   }catch(error){if(revision===searchRevision)container.innerHTML=caseSearchControl()+blank('Pencarian gagal',error.message)}finally{if(revision===searchRevision)container.removeAttribute('aria-busy')}
 }
@@ -323,9 +367,25 @@ function adminContent() {
 
 async function loadGovernance(revision) {
   try {if(!QUALITY)QUALITY=await api('/api/quality');if(revision!==viewRevision||S.tab!=='catatan')return;$('#quality-content').innerHTML=qualityContent();
-    if(ROLE==='owner'){if(!ADMIN)ADMIN=await api('/api/admin/audit');if(revision===viewRevision&&S.tab==='catatan')$('#admin-content').innerHTML=adminContent()}}
+    if(ROLE==='owner'){if(!ADMIN)ADMIN=await api('/api/admin/audit');if(revision===viewRevision&&S.tab==='catatan')$('#admin-content').innerHTML=adminContent();if(!MAPPING)MAPPING=await api('/api/admin/mapping-validation');if(revision===viewRevision&&S.tab==='catatan')$('#mapping-validation').innerHTML=mappingContent()}}
   catch(error){if(revision===viewRevision)setStatus(error.message)}
 }
+
+function mappingContent(){
+  const report=MAPPING,t=report.totals;if(!t)return '<p>Laporan pemetaan tersedia setelah impor V5 tervalidasi.</p>';
+  const labels={survey_ids:'Total survey PAM ID',master_ids:'Total master PAM ID',matched:'PAM ID cocok',unmatched:'PAM ID tidak cocok',valid_rt_rw_before:'RT/RW valid sebelum',valid_rt_rw:'RT/RW valid sesudah',missing_rt:'RT belum tersedia',missing_rw:'RW belum tersedia',address_enriched:'Diperkaya dari alamat',duplicate_master:'Duplikat master',invalid_master_neighborhood:'RT/RW Master tidak valid',territory_conflicts:'Perbedaan wilayah',address_conflicts:'Konflik alamat',secondary_id_mismatches:'PAM_ID2 berbeda'};
+  return `<p class="scope-caption">Update Data: ${esc(fd(report.reporting_date))} · Cakupan RT/RW: ${percent(t.success_rate)}</p>`+
+    dataTable(['Validasi','Jumlah'],Object.entries(labels).map(([key,label])=>[label,N(t[key]||0)]))+
+    ['regional','area','kelurahan'].map(level=>'<details class="legacy-report"><summary>Cakupan '+({regional:'Regional',area:'Area Bisnis',kelurahan:'Kelurahan'}[level])+'</summary>'+dataTable(['Wilayah','Survey','Cocok','Belum cocok','RT/RW sebelum','RT/RW sesudah','Dari alamat','Cakupan'],(report.coverage[level]||[]).map(r=>[esc(r.location.join(' / ')),N(r.survey_ids),N(r.matched),N(r.unmatched),N(r.valid_rt_rw_before),N(r.valid_rt_rw),N(r.address_enriched),percent(r.success_rate)]))+'</details>').join('')+
+    '<details class="legacy-report"><summary>Perbedaan wilayah sumber</summary>'+dataTable(['PAM ID','Update','Master','RW','RT'],(report.territory_conflicts||[]).map(r=>[esc(r.pam),esc(r.survey.join(' / ')),esc(r.master.join(' / ')),N(r.rw),N(r.rt)]))+'</details>'+
+    '<details class="legacy-report"><summary>Anomali Tanggal Survey</summary>'+dataTable(['PAM ID','Validasi','Tanggal Survey'],(report.date_anomalies||[]).map(r=>[esc(r.pam),esc(({missing:'Tanggal Survey Belum Tersedia',invalid:'Tanggal Belum Valid',future:'Tanggal setelah hari ini'})[r.quality]||r.quality),esc(r.survey_date||'–')]))+'</details>'+
+    '<details class="calculation-info"><summary>Aturan validasi impor</summary><p>'+esc(report.territory_policy)+' '+esc(report.secondary_id_policy)+' '+esc(report.duplicate_policy)+'</p></details>';
+}
+
+let agingCalendarDay=jakartaDate();
+function checkAgingDay(){const day=jakartaDate();if(day!==agingCalendarDay){agingCalendarDay=day;if(D&&S.tab==='outstanding'&&!S.aging_date)refresh()}}
+setInterval(checkAgingDay,30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkAgingDay()});
 
 function revealSelectedTab(){
   const nav=document.querySelector('.tabs'),selected=nav.querySelector('[aria-selected="true"]');
@@ -342,7 +402,7 @@ function render() {
   if(!A){$('#main').innerHTML=skeleton();return}
   $('#main').innerHTML=({ringkasan:vExecutive,analytics:vAnalytics,kelurahan:vRegional,korlap:vTeam,outstanding:vOutstanding,data:vData,catatan:vGovernance})[S.tab]();
   renderedTab=S.tab;document.querySelectorAll('#main .legacy-report').forEach((panel,index)=>{const key=S.tab+':'+(panel.id||index);if(legacyPanels.has(key))panel.open=legacyPanels.get(key)});if(ROLE!=='owner')$('#pdf')?.remove();
-  if(S.tab==='kelurahan'&&CAP.customer_detail)kt();if(['data','outstanding'].includes(S.tab))dt();if(S.tab==='catatan')loadGovernance(revision);
+  if(S.tab==='kelurahan'&&CAP.customer_detail){kt();if(S.rt>=0)dt()}if(['data','outstanding'].includes(S.tab))dt();if(S.tab==='catatan'){document.getElementById('main').insertAdjacentHTML('afterbegin','<section class="admin-section"><h2>Validasi Pemetaan RT/RW</h2><div id="mapping-validation">'+skeleton()+'</div></section>');loadGovernance(revision)}
   if(S.tab==='catatan')window.RPDStatic?.ready(ROLE,BOOT);
   document.querySelectorAll('th[data-i]').forEach(cell=>{cell.tabIndex=0;cell.setAttribute('role','button');cell.setAttribute('aria-label','Urutkan '+cell.textContent.trim())});
   const reports={ringkasan:'executive',analytics:'executive',kelurahan:'area',korlap:'team',outstanding:'outstanding'};if(reports[S.tab])$('#report-kind').value=reports[S.tab];
@@ -357,13 +417,15 @@ async function openCase(index,trigger) {
   CASE=CURRENT_ROWS[index];if(!CASE)return;caseReturnFocus=trigger;
   let dialog=$('#case-dialog');if(!dialog){dialog=document.createElement('dialog');dialog.id='case-dialog';dialog.setAttribute('aria-labelledby','case-title');document.body.appendChild(dialog);dialog.addEventListener('close',()=>{const ref=CASE?.ref;CASE=null;if(!D)return;const index=CURRENT_ROWS.findIndex(row=>row.ref===ref),replacement=index>=0?document.querySelector(`#main [data-case="${index}"]`):null;if(caseReturnFocus?.isConnected)caseReturnFocus.focus();else if(replacement)replacement.focus();else $('#main').focus({preventScroll:true})})}
   const row=CASE,latest=row.followup||{};
+  const geographyDetails=`<dl class="case-readonly">`+[['Alamat Master',row.address],['RW',row.rw?String(row.rw).padStart(3,'0'):'Belum Terpetakan'],['RT',row.rt?String(row.rt).padStart(3,'0'):'Belum Terpetakan'],['Tanggal Survey',row.survey_date||'Tanggal Survey Belum Tersedia'],['Aging Sejak Survey',row.survey_age_days==null?'Lihat Outstanding':row.survey_age_days+' hari · per '+row.aging_as_of],['Status Berkas',row.file_status],['Keterangan',row.notes],['Perbedaan wilayah',row.geographic_conflict?'Perlu tinjauan Admin':'Tidak ada']].map(([name,value])=>`<div><dt>${name}</dt><dd>${esc(value||'–')}</dd></div>`).join('')+'</dl>';
+  if(row.historical){dialog.innerHTML=`<div class="dialog-header"><h2 id="case-title">PAM ${esc(row.pam)} · snapshot laporan</h2><button id="close-case">Tutup</button></div><div class="dialog-content"><p>Snapshot historis · Hanya baca</p>${geographyDetails}</div>`;dialog.showModal();return}
   if(ROLE!=='owner'){
     dialog.innerHTML=`<div class="dialog-header"><h2 id="case-title">PAM ${esc(row.pam)}</h2><button id="close-case" aria-label="Tutup detail kasus">Tutup</button></div><div class="dialog-content"><p class="scope-caption">Guest internal · Hanya baca</p><dl class="case-readonly">`+
       [['Regional',row.regional],['Area Bisnis',row.area],['Kelurahan',row.kelurahan],['Surveyor',row.surveyor],['Status sumber',row.status],['Tunggakan (Rp)',number(row.arrears)]].map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value||'–')}</dd></div>`).join('')+'</dl><h2>Riwayat tindakan</h2><div id="case-history"></div></div>';
-    dialog.showModal();await loadCaseHistory(row.ref);return;
+    dialog.querySelector('.dialog-content').insertAdjacentHTML('afterbegin',geographyDetails);dialog.showModal();await loadCaseHistory(row.ref);return;
   }
   dialog.innerHTML=`<div class="dialog-header"><h2 id="case-title">PAM ${esc(row.pam)} · follow-up</h2><button id="close-case" aria-label="Tutup detail kasus">Tutup</button></div><div class="dialog-content"><p class="mu sm">${esc(row.ref)} · ${esc(row.area)} · status sumber ${esc(row.status)}</p><form id="followup-form" class="admin-form"><label class="field">PIC penanggung jawab<input name="pic" maxlength="150" value="${esc(latest.pic||row.coordinator)}" required></label><label class="field">Status tindak lanjut (terpisah)<select name="status">${D.dic.kf.filter(Boolean).concat(D.dic.kf.includes('Tidak tercatat')?[]:['Tidak tercatat']).map(status=>option(status,status,status===(latest.status||row.status))).join('')}</select></label><label class="field">Target selesai<input name="target_date" type="date" value="${esc(latest.target_date||'')}"></label><label class="field wide">Aksi tindak lanjut<textarea name="action" maxlength="2000" required></textarea></label><label class="field wide">Catatan resolusi<textarea name="resolution_notes" maxlength="2000">${esc(latest.resolution_notes||'')}</textarea></label><label class="field">Awal kasus terkonfirmasi<input name="case_started" type="date" value="${esc(latest.case_started||'')}" max="${new Date().toISOString().slice(0,10)}"></label><label class="field">Total hari jeda terverifikasi<input name="pause_days" type="number" min="0" max="36500" value="${latest.pause_days||0}"></label><label class="field">Alasan jeda<input name="pause_reason" maxlength="500" value="${esc(latest.pause_reason||'')}"></label><button>Tambahkan ke riwayat</button><p class="form-status" role="status"></p></form><p class="mu sm">Awal kasus dan jeda memerlukan bukti operasional. Tidak diambil otomatis dari tanggal survei. Aksi baru tidak menghapus aksi sebelumnya.</p><h2>Riwayat tindakan</h2><div id="case-history">${skeleton()}</div></div>`;
-  dialog.showModal();await loadCaseHistory(row.ref);
+  dialog.querySelector('.dialog-content').insertAdjacentHTML('afterbegin',geographyDetails);dialog.showModal();await loadCaseHistory(row.ref);
 }
 
 async function loadCaseHistory(ref,before=null) {
@@ -388,7 +450,7 @@ document.addEventListener('submit',async event=>{
 document.addEventListener('input',event=>{
   const target=event.target;if(target.id==='filter-search'){fill();return}
   if(target.id.startsWith('potential-')){target.setCustomValidity('');return}
-  if(target.id==='case-search'){S.dq.query=target.value=target.value.slice(0,150);PAGE=0;clearTimeout(searchTimer);searchRevision++;searchTimer=setTimeout(dt,300);return}
+  if(target.id==='case-search'){recordQuery().query=target.value=target.value.slice(0,150);PAGE=0;clearTimeout(searchTimer);searchRevision++;searchTimer=setTimeout(dt,300);return}
   if(target.dataset.gridSearch){const id=target.dataset.gridSearch,state=gridStates.get(id);state.q=target.value;state.page=0;const pos=target.selectionStart;updateGrid(id);const field=document.querySelector('[data-grid-search="'+id+'"]');field?.focus();field?.setSelectionRange(pos,pos);return}
   if(target.id==='q'){S.q=target.value;S.all=0;kt()}
   else if(['qp','qk','qs'].includes(target.id)){S.dq[{qp:'p',qk:'k',qs:'s'}[target.id]]=target.value;PAGE=0;clearTimeout(searchTimer);searchTimer=setTimeout(dt,250)}
@@ -396,6 +458,10 @@ document.addEventListener('input',event=>{
 
 document.addEventListener('change',async event=>{
   const target=event.target;
+  if(target.id==='aging-date'){S.aging_date=target.value;PAGE=0;refresh();return}
+  if(target.id==='aging-snapshot'){S.snapshot=target.value;PAGE=0;refresh();return}
+  if(target.id==='out-surveyor'||target.id==='out-obstacle'){S[target.id==='out-surveyor'?'out_surveyor':'out_obstacle']=target.value;PAGE=0;refresh();return}
+  if(target.id.startsWith('outg-')){const key=target.id.slice(5);S[key]=key==='reg'?target.value:Number(target.value);if(key==='reg')S.ab=S.kel=S.rw=S.rt=-1;if(key==='ab'){if(S.ab>=0)S.reg=D.reg[S.ab];S.kel=S.rw=S.rt=-1}if(key==='kel')S.rw=S.rt=-1;if(key==='rw')S.rt=-1;PAGE=0;refresh();return}
   if(target.id.startsWith('potential-')){
     const key=target.id.slice(10),match=[...target.list.options].find(option=>option.value.toLocaleLowerCase('id')===target.value.trim().toLocaleLowerCase('id'));
     if(!match){target.setCustomValidity('Pilih wilayah dari daftar.');target.reportValidity();return}
@@ -430,7 +496,9 @@ document.addEventListener('click',async event=>{
     gridStates.clear();await refresh();return;
   }
   if(target.id==='reset-potential'){Object.assign(S,{reg:'',ab:-1,kel:-1,rw:-1,rt:-1,coordinator:''});gridStates.clear();refresh();return}
-  if(target.dataset.caseSort){const q=S.dq;q.descending=q.sort===target.dataset.caseSort?!q.descending:false;q.sort=target.dataset.caseSort;PAGE=0;dt();return}
+  if(target.dataset.caseSort){const q=recordQuery();q.descending=q.sort===target.dataset.caseSort?!q.descending:target.dataset.caseSort==='survey_age_days';q.sort=target.dataset.caseSort;PAGE=0;dt();return}
+  if(target.dataset.agingBucket!==undefined){S.aging_bucket=target.dataset.agingBucket;PAGE=0;refresh();return}
+  if(target.id==='aging-today'){S.aging_date='';PAGE=0;refresh();return}
   if(target.dataset.gridSort){const id=target.dataset.gridSort,state=gridStates.get(id),col=+target.dataset.column;state.direction=state.col===col?-state.direction:1;state.col=col;state.page=0;updateGrid(id);return}
   if(target.dataset.gridPage){const id=target.dataset.gridPage;gridStates.get(id).page+=+target.dataset.step;updateGrid(id);return}
   const route=target.dataset.tab||target.dataset.route;

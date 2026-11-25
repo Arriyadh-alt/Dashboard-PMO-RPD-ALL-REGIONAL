@@ -12,6 +12,7 @@ from datetime import date
 import getpass
 import io
 import json
+import re
 import math
 import os
 from pathlib import Path
@@ -141,10 +142,13 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False, 
     if not full_snapshot:
         raise ValueError('Explicit full-snapshot confirmation is required; never append cumulative input')
     prepare(baseline)
-    if intake.get('layout_version') not in (2, 4):
+    if intake.get('layout_version') not in (2, 4, 5):
         raise ValueError('Re-run the version 2 workbook intake for recommendation and total arrears')
     from scripts.v4_metrics import EXTRA_RECORD_FIELDS, enhance, validate_intake
-    v4 = intake.get('layout_version') == 4
+    v4 = intake.get('layout_version') in (4, 5)
+    v5 = intake.get('layout_version') == 5
+    if baseline['meta'].get('v5') and not v5:
+        raise ValueError('V5 daily refresh requires V5 geography/date/snapshot intake')
     if v4:
         validate_intake(intake)
     elif 'G' in baseline:
@@ -156,6 +160,16 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False, 
     if any(len(values) != len(old_ids) for values in baseline['rec'].values()):
         raise ValueError('Baseline record column lengths differ')
     survey, master = index_records(intake['survey']), index_records(intake['master'])
+    if v5:
+        survey={pam:({**row,'survey_date':None,'date_quality':'invalid'}
+                     if row['survey_date'] and not 2000<=int(row['survey_date'][:4])<=2099 else row)
+                for pam,row in survey.items()}
+        for pam,row in master.items():
+            labels={}
+            for kind in ('rw','rt'):
+                match=re.fullmatch(kind+r'\s*[.:=-]?\s*(\d{1,3})',text(row[kind]),re.I)
+                if match: labels[kind]=match[1]
+            if labels: master[pam]={**row,**labels}
     if not old_set <= survey.keys():
         raise ValueError('Snapshot omits existing survey IDs; review deletions or incremental input')
     # A matched master customer may have a blank FINAL FLAG. Other source
@@ -208,7 +222,7 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False, 
     while data['months'][-1] < latest:
         data['months'].append(next_month(data['months'][-1]))
     month_index = {value: j for j, value in enumerate(data['months'])}
-    month = lambda value: month_index.get(value[:7], 0)
+    month = lambda value: month_index.get(value[:7], 0) if value else 0
 
     def code(field, value):
         value = text(value)
@@ -233,7 +247,7 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False, 
         if canonical not in svs or svs[canonical] not in coordinators:
             raise ValueError('Unmapped surveyor/coordinator requires private roster review')
         sv = svs[canonical]
-        t = date_code(row['survey_date'], required=True)
+        t = date_code(row['survey_date'], required=not v5)
         fa, mt = date_code(row['fa_date']), date_code(row['meter_date'])
         c1, c2, status = text(row['result']), text(row['result_detail']), text(row['installation_status'])
         interested, uninterested = header(row['minat'] if v4 else c1) == 'berminat', c1 == 'Tidak Berminat'
@@ -307,12 +321,17 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False, 
     for name, width in [('A', 2), ('S', 4), ('K', 3), ('E', 2), ('P', 2), ('W', 4)]:
         if name in data or name != 'K':
             data[name] = ordered_groups(groups[name], data.get(name, []), width)
-    survey_dates = sorted(r['survey_date'] for r in survey.values())
+    survey_dates = sorted(r['survey_date'] for r in survey.values() if r['survey_date'])
+    if not survey_dates:
+        raise ValueError('No valid survey dates; retain previous valid release')
     data['meta'].update(rows=len(survey), uniq=len(survey), tmin=survey_dates[0],
                         tmax=survey_dates[-1], rt_bad=rt_bad, sync=sync)
     bootstrap_compatible = data == baseline
     if v4:
         enhance(data, intake, survey, master, ordered_ids, location, neighborhood)
+    if v5:
+        from scripts.v5_metrics import enhance as enhance_v5
+        enhance_v5(data, intake, survey, master, ordered_ids, location, neighborhood)
     changed = data != baseline
     if bootstrap and changed and not (v4 and bootstrap_compatible):
         raise ValueError('Alias bootstrap requires exact record, classification and aggregate parity')
