@@ -87,7 +87,9 @@ html,body,button,input,select,textarea{font-family:Arial,Helvetica,sans-serif}
 .aging-controls .field{min-width:160px}.aging-controls button{min-height:38px}
 .out-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
 .out-filter-panel{margin:16px 0}.out-filter-panel summary,.calculation-info summary{cursor:pointer;color:var(--accent);font-size:12px}
-.out-filters select,.out-filters input{max-width:100%;min-width:0;min-height:38px}
+.out-filters>.field{min-width:0}
+.out-filters>button{min-width:0;white-space:normal}
+.out-filters select,.out-filters input{width:100%;max-width:100%;min-width:0;min-height:38px;box-sizing:border-box}
 .aging-panel{margin-top:16px}.aging-chart{display:grid;gap:7px}
 .aging-bar{display:grid;grid-template-columns:minmax(170px,1fr) 2fr 60px;gap:12px;align-items:center;text-align:left;border:0;background:transparent;padding:8px;border-left:4px solid var(--aging-color);font-size:12px}
 .aging-bar[aria-pressed=true]{outline:2px solid var(--accent);outline-offset:1px;background:var(--soft)}
