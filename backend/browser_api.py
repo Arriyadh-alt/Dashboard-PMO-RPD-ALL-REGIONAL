@@ -76,7 +76,7 @@ class BrowserAPI:
         source=self.data
         filters={key:integer(raw.get(key,default),low,high) for key,default,low,high in [('m0',0,0,len(source['months'])-1),('m1',len(source['months'])-1,0,len(source['months'])-1),('ab',-1,-1,len(source['abs'])-1),('kel',-1,-1,len(source['kels'])-1)]}
         filters.update({key:text(raw,key,maximum) for key,maximum in [('reg',100),('coordinator',150),('start',10),('end',10)]})
-        filters.update({key: integer(raw.get(key,-1),-1,999) for key in ('rw','rt')})
+        filters.update({key: integer(raw.get(key,-1),-1,99) for key in ('rw','rt')})
         filters.update({key: text(raw,key,maximum) for key,maximum in [('aging_date',10),('snapshot',10),('aging_bucket',30),('out_surveyor',150),('out_obstacle',500),('out_query',150)]})
         statuses=raw.get('statuses',[])
         if not isinstance(statuses,list) or len(statuses)>30 or any(not isinstance(value,str) for value in statuses):

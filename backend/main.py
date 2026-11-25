@@ -42,8 +42,8 @@ class MappingChange(StrictModel):
 
 
 class Scope(StrictModel):
-    rw: int = Field(default=-1, ge=-1, le=999)
-    rt: int = Field(default=-1, ge=-1, le=999)
+    rw: int = Field(default=-1, ge=-1, le=99)
+    rt: int = Field(default=-1, ge=-1, le=99)
     aging_date: str = Field(default='', max_length=10)
     snapshot: str = Field(default='', max_length=10)
     aging_bucket: str = Field(default='', max_length=30)

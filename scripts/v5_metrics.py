@@ -20,7 +20,7 @@ def address_neighborhood(address):
             values[key].add(int(match[1]))
     if any(len(items)>1 for items in values.values()):
         return {'rt': 0, 'rw': 0}
-    return {key: next(iter(items)) if len(items) == 1 and 0 < next(iter(items)) <= 999 else 0
+    return {key: next(iter(items)) if len(items) == 1 and 0 < next(iter(items)) <= 99 else 0
             for key, items in values.items()}
 
 
@@ -35,10 +35,10 @@ def enhance(data, intake, survey, master, ordered_ids, location, neighborhood):
         def column(kind):
             try:
                 numeric=float(text(row[kind]))
-                value=int(numeric) if numeric.is_integer() and 0<numeric<=999 else 0
+                value=int(numeric) if numeric.is_integer() and 0<numeric<=99 else 0
             except (ValueError,TypeError): value=0
             explicit=re.fullmatch(kind+r'\s*[.:=-]?\s*(\d{1,3})',text(row[kind]),re.I)
-            return value or (int(explicit[1]) if explicit and 0<int(explicit[1])<=999 else 0)
+            return value or (int(explicit[1]) if explicit and 0<int(explicit[1])<=99 else 0)
         rw, rt = column('rw'), column('rt')
         if not rw or not rt:
             extracted = address_neighborhood(row.get('address'))
