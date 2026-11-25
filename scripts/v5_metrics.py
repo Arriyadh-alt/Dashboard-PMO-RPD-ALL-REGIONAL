@@ -30,7 +30,7 @@ def enhance(data, intake, survey, master, ordered_ids, location, neighborhood):
     Master stocks/deductions retain master territory. A territory discrepancy is
     reported, not treated as a failed identity join or rewritten survey territory.
     """
-    places, enriched, address_conflicts = {}, set(), set()
+    places, enriched, address_conflicts, invalid_master = {}, set(), set(), set()
     for pam, row in master.items():
         def column(kind):
             try:
@@ -49,8 +49,10 @@ def enhance(data, intake, survey, master, ordered_ids, location, neighborhood):
                 try: missing=float(raw)==0
                 except ValueError: missing=False
                 if not missing: invalid_primary=True
-            conflict = invalid_primary or bool(rw and extracted['rw'] and rw != extracted['rw'] or rt and extracted['rt'] and rt != extracted['rt'])
-            if conflict:
+            conflict = bool(rw and extracted['rw'] and rw != extracted['rw'] or rt and extracted['rt'] and rt != extracted['rt'])
+            if invalid_primary:
+                invalid_master.add(pam)
+            elif conflict:
                 address_conflicts.add(pam)
             else:
                 new_rw, new_rt = rw or extracted['rw'], rt or extracted['rt']
@@ -108,6 +110,7 @@ def enhance(data, intake, survey, master, ordered_ids, location, neighborhood):
         for key, values in coverage.items(): rollup[key[:width]].update(values)
         layers[level] = [{'location': list(key), **formatted(counts)} for key, counts in sorted(rollup.items())]
     data['_admin_mapping_report'] = {'totals': {**formatted(totals), 'master_ids': len(master),
+        'invalid_master_neighborhood':len(invalid_master),
         'duplicate_master': intake['summary']['master']['duplicate_excess_rows'],
         'secondary_id_mismatches': intake['summary']['master_secondary_id_mismatches']},
         'coverage': layers, 'territory_conflicts': conflicts, 'date_anomalies': date_anomalies,
