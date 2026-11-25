@@ -125,3 +125,11 @@ def test_export_bucket_reference_and_query_match_the_table():
     assert len(rows)==len(expected)==1
     assert rows[0][headers.index('Aging per')]=='2026-11-25'
     assert rows[0][headers.index('Aging Sejak Survey (Hari)')]==expected[0]['survey_age_days']
+
+
+def test_aggregate_viewer_cannot_get_protected_dictionaries():
+    data,_,_=v5_source()
+    aggregate=BrowserAPI(data,'guest','fixture',{}).bootstrap()['data']
+    assert 'ad' not in aggregate['dic'] and 'nt' not in aggregate['dic'] and 'G' not in aggregate
+    operational=BrowserAPI(data,'guest','fixture',{},operational_guest=True).bootstrap()['data']
+    assert 'ad' in operational['dic'] and 'nt' in operational['dic']

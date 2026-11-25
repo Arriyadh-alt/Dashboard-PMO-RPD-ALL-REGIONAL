@@ -246,6 +246,7 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
         if source['meta'].get('reporting_date'):
             safe['meta']['reporting_date'] = source['meta']['reporting_date']
         if session.role != "owner":
+            safe['dic']={key:value for key,value in source['dic'].items() if key not in ('ad','nt')}
             safe["svs"] = [f"Surveyor {index + 1}" for index in range(len(source["svs"]))]
         mapping_events=store.history('mapping','all',limit=1)
         overrides=mapping_events[0]['payload'] if mapping_events else {}

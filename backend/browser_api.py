@@ -94,6 +94,8 @@ class BrowserAPI:
         for key in ('reporting_date','v5'):
             if key in source['meta']: safe['meta'][key] = source['meta'][key]
         if self.role!='owner' and not self.operational_guest:
+            safe['dic']={key:value for key,value in source['dic'].items() if key not in ('ad','nt')}
+            safe.pop('G',None)
             safe['svs']=[f'Surveyor {index+1}' for index in range(len(source['svs']))]
         mapping=self.store.history('mapping','all',1)
         overrides=mapping[0]['payload'] if mapping else {}
