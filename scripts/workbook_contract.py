@@ -12,6 +12,7 @@ from datetime import date
 import getpass
 import io
 import json
+import re
 import math
 import os
 from pathlib import Path
@@ -159,6 +160,13 @@ def convert(baseline, intake, aliases, *, full_snapshot=False, bootstrap=False, 
     if any(len(values) != len(old_ids) for values in baseline['rec'].values()):
         raise ValueError('Baseline record column lengths differ')
     survey, master = index_records(intake['survey']), index_records(intake['master'])
+    if v5:
+        for pam,row in master.items():
+            labels={}
+            for kind in ('rw','rt'):
+                match=re.fullmatch(kind+r'\s*[.:=-]?\s*(\d{1,3})',text(row[kind]),re.I)
+                if match: labels[kind]=match[1]
+            if labels: master[pam]={**row,**labels}
     if not old_set <= survey.keys():
         raise ValueError('Snapshot omits existing survey IDs; review deletions or incremental input')
     # A matched master customer may have a blank FINAL FLAG. Other source

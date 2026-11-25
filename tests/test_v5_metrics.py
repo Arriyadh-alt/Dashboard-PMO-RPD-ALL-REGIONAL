@@ -146,3 +146,9 @@ def test_followup_allowed_for_identified_undated_outstanding():
     assert api.request(path)['events']==[]
     api.request(path,'POST',{'pic':'Fixture PIC','status':'Outstanding','action':'Periksa tanggal sumber'})
     assert len(api.request(path)['events'])==1
+
+
+def test_labeled_master_columns_are_normalized_before_legacy_stock_building():
+    def change(intake): intake['master'][0].update(rw='RW 005',rt='RT.003')
+    data,_,_=v5_source(change)
+    assert data['rec']['rw'][0]==5 and data['rec']['rt'][0]==3
