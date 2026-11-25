@@ -88,6 +88,9 @@ html,body,button,input,select,textarea{font-family:Arial,Helvetica,sans-serif}
 .out-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
 .out-filter-panel{margin:16px 0}.out-filter-panel summary,.calculation-info summary{cursor:pointer;color:var(--accent);font-size:12px}
 .out-filters>.field{min-width:0}
+#gf .field{min-width:0}
+#gf input,#gf select{box-sizing:border-box;min-width:0}
+#gf .preset-row select{max-width:100%}
 .out-filters>button{min-width:0;white-space:normal}
 .out-filters select,.out-filters input{width:100%;max-width:100%;min-width:0;min-height:38px;box-sizing:border-box}
 .aging-panel{margin-top:16px}.aging-chart{display:grid;gap:7px}
