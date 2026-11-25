@@ -42,7 +42,14 @@ def enhance(data, intake, survey, master, ordered_ids, location, neighborhood):
         rw, rt = column('rw'), column('rt')
         if not rw or not rt:
             extracted = address_neighborhood(row.get('address'))
-            conflict = bool(rw and extracted['rw'] and rw != extracted['rw'] or rt and extracted['rt'] and rt != extracted['rt'])
+            invalid_primary=False
+            for kind,valid in (('rw',rw),('rt',rt)):
+                raw=text(row[kind])
+                if valid or raw in ('','-'): continue
+                try: missing=float(raw)==0
+                except ValueError: missing=False
+                if not missing: invalid_primary=True
+            conflict = invalid_primary or bool(rw and extracted['rw'] and rw != extracted['rw'] or rt and extracted['rt'] and rt != extracted['rt'])
             if conflict:
                 address_conflicts.add(pam)
             else:
