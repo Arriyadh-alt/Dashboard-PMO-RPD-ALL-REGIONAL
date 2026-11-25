@@ -15,7 +15,7 @@ const number = value => value == null ? unavailable : N(value);
 const timeLabel = value => value ? new Intl.DateTimeFormat('id-ID',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)) : unavailable;
 const scopeKeys = ['m0','m1','reg','ab','kel','coordinator','statuses','start','end'];
 const jakartaDate = () => new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-const scopeObject = () => ({...Object.fromEntries([...scopeKeys,...(['outstanding','kelurahan','data'].includes(S.tab)?['rw','rt']:[])].map(key=>[key,S[key]]).filter(([,value])=>value!==''&&value!==undefined)),...(S.tab==='outstanding'?{aging_date:S.aging_date||jakartaDate(),snapshot:S.snapshot||'',aging_bucket:S.aging_bucket||'',out_surveyor:S.out_surveyor||'',out_obstacle:S.out_obstacle||'',out_query:S.oq?.query||''}:{})});
+const scopeObject = () => ({...Object.fromEntries([...scopeKeys,...(D?.meta?.v5&&['outstanding','kelurahan','data'].includes(S.tab)?['rw','rt']:[])].map(key=>[key,S[key]]).filter(([,value])=>value!==''&&value!==undefined)),...(S.tab==='outstanding'?{aging_date:S.aging_date||jakartaDate(),snapshot:S.snapshot||'',aging_bucket:S.aging_bucket||'',out_surveyor:S.out_surveyor||'',out_obstacle:S.out_obstacle||'',out_query:S.oq?.query||''}:{})});
 const params = () => {const p=new URLSearchParams();for(const [key,value] of Object.entries(scopeObject())){if(key==='statuses')value.forEach(status=>p.append('status',status));else p.set(key,value)}return p};
 const notice = (message,warning=false) => `<p class="scope-note${warning?' warning':''}">${esc(message)}</p>`;
 const blank = (title,message) => `<section class="empty-state"><h2>${esc(title)}</h2><p>${esc(message)}</p></section>`;
@@ -259,7 +259,7 @@ function potentialView(){
     select('rw','RW',rwOptions,S.rw,S.kel<0)+select('rt','RT',rtOptions,S.rt,S.rw<0)+'<button id="reset-potential" type="button">Reset Filter</button></div></div>'+
     '<div class="intel-kpis potential-kpis">'+[['potential','Total Potensi'],['canvassed','Tercanvassing'],['interested','Berminat'],['installed','Terpasang'],['remaining','Sisa Potensi'],['outstanding','Outstanding']].map(([key,label])=>`<article class="intel-card"><span class="metric-label">${label}</span><strong class="metric-value${totals[key]==null?' unavailable':''}">${totals[key]==null?'Belum tersedia':N(totals[key])}</strong></article>`).join('')+'</div>'+
     '<details class="calculation-info"><summary>Informasi perhitungan</summary><p>Seluruh periode. Wilayah operasional mengikuti Update; RT/RW dan alamat dari pelanggan yang cocok di Master. Potensi mengikuti FINAL FLAG = POTENSI; Sisa dikurangi Berminat yang cocok pada stok master. Tim/status tidak mengubah stok ini. RT/RW yang belum memiliki sumber valid tetap belum terpetakan.</p></details>'+
-    `<div class="potential-table">${dataTable(headers,cells,'Tidak ada data pada wilayah ini.')}</div>${S.rt>=0?'<h3>Data Operasional RT</h3><div id="field-records">'+skeleton()+'</div>':''}</section>`;
+    `<div class="potential-table">${dataTable(headers,cells,'Tidak ada data pada wilayah ini.')}</div>${S.rt>=0?(D.meta.v5?'<h3>Data Operasional RT</h3><div id="field-records">'+skeleton()+'</div>':'<p>Daftar PAM per RT memerlukan impor V5. Potensi master tetap ditampilkan di atas.</p>'):''}</section>`;
 }
 
 function vTeam() {

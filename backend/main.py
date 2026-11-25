@@ -245,6 +245,7 @@ def create_app(source_path=None, state_dir=None, origin=None, dev=None):
                         for key in ("tmin", "tmax", "rows", "uniq", "sync", "korlaps", "rt_bad")}
         if source['meta'].get('reporting_date'):
             safe['meta']['reporting_date'] = source['meta']['reporting_date']
+        if source['meta'].get('v5'): safe['meta']['v5']=True
         if session.role != "owner":
             safe['dic']={key:value for key,value in source['dic'].items() if key not in ('ad','nt')}
             safe["svs"] = [f"Surveyor {index + 1}" for index in range(len(source["svs"]))]
