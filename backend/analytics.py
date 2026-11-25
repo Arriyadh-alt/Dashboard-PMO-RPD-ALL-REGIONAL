@@ -166,8 +166,9 @@ def period_bounds(data, filters):
     return start, end
 
 
-def matches(data, prepared, row, filters, overrides, date_field="date", dates=True, bounds=None):
-    if not row["valid"]:
+def matches(data, prepared, row, filters, overrides, date_field="date", dates=True, bounds=None, include_undated=False):
+    undated=include_undated and date_field=='date' and row['date'] is None and row['valid_location'] and bool(row['pam'])
+    if not row["valid"] and not undated:
         return False
     if filters.get("reg") and data["reg"][row["ab"]] != filters["reg"]:
         return False
@@ -182,7 +183,7 @@ def matches(data, prepared, row, filters, overrides, date_field="date", dates=Tr
     statuses = filters.get("statuses", [])
     if statuses and row["status"] not in statuses:
         return False
-    if dates:
+    if dates and not undated:
         start, end = bounds if bounds is not None else period_bounds(data, filters)
         value = row[date_field]
         if not value or (start and value < start) or value > end:
@@ -190,11 +191,11 @@ def matches(data, prepared, row, filters, overrides, date_field="date", dates=Tr
     return True
 
 
-def scoped_rows(data, prepared, filters, overrides, date_field="date"):
+def scoped_rows(data, prepared, filters, overrides, date_field="date", *, include_undated=False):
     bounds=period_bounds(data,filters)
     statuses=filters.get('statuses',[])
     base_filters={**filters,'statuses':[]} if statuses else filters
-    rows=[row for row in prepared['rows'] if matches(data,prepared,row,base_filters,overrides,date_field,bounds=bounds)]
+    rows=[row for row in prepared['rows'] if matches(data,prepared,row,base_filters,overrides,date_field,bounds=bounds,include_undated=include_undated)]
     return status_scope(rows,statuses)
 
 
@@ -499,7 +500,8 @@ def search_records(data, prepared, filters, overrides, actions, body):
     offset, limit = body.get('offset', 0), body.get('limit', 50)
     selected, total = [], 0
     searchable = ('pam', 'ref', 'survey_date', 'regional', 'area', 'kelurahan', 'surveyor', 'coordinator', 'canvassing', 'status', 'fa_date', 'installation_date', 'obstacle', 'master_flag', 'potential_status', 'customer_status', 'arrears')
-    for row in scoped_rows(data, prepared, filters, overrides):
+    geographic_detail=data['meta'].get('v5') and any(int(filters.get(key,-1))>=0 for key in ('rw','rt'))
+    for row in scoped_rows(data, prepared, filters, overrides, include_undated=geographic_detail):
         if body.get('pam') and not row['pam'].startswith(str(body['pam']).strip().lstrip('0')): continue
         if body.get('kelurahan') and body['kelurahan'].casefold() not in data['kels'][row['kel']].casefold(): continue
         if body.get('surveyor') and body['surveyor'].casefold() not in data['svs'][row['sv']].casefold(): continue
