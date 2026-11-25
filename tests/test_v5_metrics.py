@@ -159,3 +159,16 @@ def test_implausible_legacy_excel_date_is_retained_as_invalid_case():
     data,_,_=v5_source(change)
     rows=aging.records(data,prepare(data),{'start':'2026-11-01','end':'2026-11-30'},{},{})
     assert len(rows)==1 and rows[0]['survey_date_quality']=='invalid' and rows[0]['survey_age_days'] is None
+
+
+def test_legacy_conflicting_pam_locations_keep_distinct_case_histories():
+    from tests.fixtures import fixture_data
+    data=fixture_data();api=BrowserAPI(data,'owner','fixture',{})
+    records=api.request('/api/records/search','POST',{'query':'10000009'})['rows']
+    conflicts=[row for row in records if row['pam'].lstrip('0')=='10000009']
+    assert len(conflicts)==2 and len({row['ref'] for row in conflicts})==2
+    for row in conflicts:
+        path='/api/followups/'+row['ref']
+        assert api.request(path)['events']==[]
+        api.request(path,'POST',{'pic':'Fixture PIC','status':'Outstanding','action':'Verifikasi wilayah'})
+        assert len(api.request(path)['events'])==1
