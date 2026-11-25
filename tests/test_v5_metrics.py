@@ -4,7 +4,7 @@ from datetime import date, datetime, timezone
 import pytest
 
 from backend import aging
-from backend.analytics import normalize_pam, prepare
+from backend.analytics import build_analysis, normalize_pam, prepare
 from backend.browser_api import BrowserAPI, LocalEvents
 from backend.exports import report_table
 from scripts.v5_metrics import address_neighborhood
@@ -17,7 +17,7 @@ def v5_source(change=None):
     baseline,intake=snapshot()
     intake['layout_version']=5
     intake['summary']['master_secondary_id_mismatches']=0
-    for row in intake['master']: row['address']='JALAN SINTETIS RT.003 RW.005'
+    for index,row in enumerate(intake['master']): row['address']='JALAN SINTETIS RT.003 RW.005' if index==0 else ''
     for row in intake['survey']: row.update(date_quality='valid',incomplete_reason='Alasan sintetis')
     if change: change(intake)
     aliases=bootstrap_aliases(baseline,intake)
@@ -121,7 +121,7 @@ def test_export_bucket_reference_and_query_match_the_table():
     data,_,_=v5_source(); prepared=prepare(data)
     filters={'aging_date':'2026-11-25','out_query':'103'}
     expected=aging.search(data,prepared,filters,{},{},{'query':'103'})['rows']
-    headers,rows=report_table('outstanding',{},data,prepared,filters,LocalEvents(),'owner')
+    headers,rows=report_table('outstanding',build_analysis(data,prepared,filters,LocalEvents(),'owner'),data,prepared,filters,LocalEvents(),'owner')
     assert len(rows)==len(expected)==1
     assert rows[0][headers.index('Aging per')]=='2026-11-25'
     assert rows[0][headers.index('Aging Sejak Survey (Hari)')]==expected[0]['survey_age_days']
