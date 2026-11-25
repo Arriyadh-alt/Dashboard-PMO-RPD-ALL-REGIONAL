@@ -517,6 +517,8 @@ def search_records(data, prepared, filters, overrides, actions, body):
                 value = view['arrears']
                 amount = 'Data belum tersedia' if value is None else format(Decimal(str(value)).quantize(Decimal('0.001'), rounding=ROUND_HALF_UP), ',f').rstrip('0').rstrip('.').translate(str.maketrans({',': '.', '.': ','}))
                 text = ' '.join(str(view[key]) if view[key] is not None else '–' for key in searchable)
+                if view['survey_date'] is None:
+                    text+=' Tanggal Survey Tidak Valid' if view.get('survey_date_quality')=='invalid' else ' Tanggal Survey Belum Tersedia'
                 if query not in f'{text} {amount} {followup}'.casefold(): continue
         if sort or offset <= total < offset + limit:
             selected.append(view if view is not None else record_view(data, prepared, row, overrides, actions.get(row['ref'])))

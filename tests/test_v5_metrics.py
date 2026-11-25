@@ -174,15 +174,17 @@ def test_legacy_conflicting_pam_locations_keep_distinct_case_histories():
         assert len(api.request(path)['events'])==1
 
 
-def test_geographic_detail_keeps_undated_rows_without_changing_cohort_metrics():
-    def change(intake): intake['survey'][2].update(survey_date=None,date_quality='missing')
+@pytest.mark.parametrize('quality,label',[('missing','Tanggal Survey Belum Tersedia'),('invalid','Tanggal Survey Tidak Valid')])
+def test_geographic_detail_keeps_undated_rows_without_changing_cohort_metrics(quality,label):
+    def change(intake): intake['survey'][2].update(survey_date=None,date_quality=quality)
     data,_,_=v5_source(change);api=BrowserAPI(data,'guest','fixture',{},operational_guest=True)
     filters={'rw':0,'rt':0}
     result=api.request('/api/records/search','POST',{'scope':filters})
     expected=sum(row[5] for row in data['G'] if row[2:4]==[0,0])
     assert result['total']==expected==2
     undated=[row for row in result['rows'] if row['survey_date'] is None]
-    assert len(undated)==1 and undated[0]['survey_date_quality']=='missing'
+    assert len(undated)==1 and undated[0]['survey_date_quality']==quality
+    assert api.request('/api/records/search','POST',{'scope':filters,'query':label})['total']==1
     assert build_analysis(data,prepare(data),filters,LocalEvents(),'owner')['metrics']['canvassed']==1
     bounded={**filters,'start':'2026-11-01','end':'2026-11-30'}
     assert api.request('/api/records/search','POST',{'scope':bounded})['total']==1
